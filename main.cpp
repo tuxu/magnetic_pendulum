@@ -162,7 +162,7 @@ void distances_to_magnets(const float *y, float *distances) {
 int find_magnet(float phi, float theta) {
     // Constants
     const float time_step = 5.0;
-    const int time_count = 500;
+    const int time_count = 5000;
     const float time_dt = time_step / time_count;
     const int max_iterations = 30;
     const float min_kin = 0.5;
@@ -226,7 +226,7 @@ int find_magnet(float phi, float theta) {
 
 float phi_from = 0.0, phi_to = 2*M_PI;
 float theta_from = 0.5 * M_PI, theta_to = M_PI;
-const int phi_steps = 50, theta_steps = 50;
+const int phi_steps = 400, theta_steps = 400;
 int magnets[phi_steps][theta_steps];
 ILubyte pixels[phi_steps * theta_steps * 3];
 ILubyte colors[3*3] = {255, 0, 0,
@@ -250,8 +250,12 @@ void magnet_map() {
     float dtheta = (theta_to - theta_from) / (theta_steps - 1);
     float phi = 0, theta = 0;
     
-    for (int x = 0; x < phi_steps; ++x, phi += dphi) {
-        for (int y = 0; y < theta_steps; ++y, theta += dtheta) {
+    for (int x = 0; x < phi_steps; ++x) {
+        for (int y = 0; y < theta_steps; ++y) {
+            // Determine current position.
+            phi = phi_from + x * dphi;
+            theta = theta_from + y * dtheta;
+
             // Progress indicator.
             float progress = 100.0 * (x*theta_steps+y+1) / (phi_steps*theta_steps);
             cout << showpoint << fixed;
@@ -316,6 +320,6 @@ int main (int argc, const char *argv[]) {
     setup();
     magnet_map();    
     save_image("test.tif");
-    output_magnets();
+    //output_magnets();
 }
 
