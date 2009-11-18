@@ -3,9 +3,10 @@
 #include <cmath>
 using namespace std;
 
+void rhs(const float t, const float y[], float yout[]);
+
 void rk4(float yout[], float y[], float dydt[], const size_t n,
-         const float t, const float h,
-         void derivs(const float t, const float y[], float yout[])) {
+         const float t, const float h) {
     float dym[n], dyt[n], yt[n];
     float hh = h * 0.5;
     float h6 = h / 6.0;
@@ -16,25 +17,52 @@ void rk4(float yout[], float y[], float dydt[], const size_t n,
         yt[i] = y[i] + hh * dydt[i];
 
     // Second step.
-    derivs(th, yt, dyt);
+    rhs(th, yt, dyt);
     for (size_t i = 0; i < n; ++i)
         yt[i] = y[i] + hh * dyt[i];
 
     // Third step.
-    derivs(th, yt, dym);
+    rhs(th, yt, dym);
     for (size_t i = 0; i < n; ++i) {
         yt[i] = y[i] + h * dym[i];
         dym[i] += dyt[i];
     }
 
     // Fourth step.
-    derivs(t + h, yt, dyt);
+    rhs(t + h, yt, dyt);
 
     // Produce output.
     for (size_t i = 0; i < n; ++i) {
         yout[i] = y[i] + h6 * (dydt[i] + dyt[i] + 2.0 * dym[i]);
     }
 
+}
+
+void rkdumb(float yout[], float y[], const size_t n, const float t1,
+            const float t2, const size_t steps) {
+    float vout[n], v[n], dv[n];
+    
+    for (size_t i = 0; i < n; ++i) {
+        v[i] = y[i];
+    }
+
+    float t = t1;
+    float h = (t2 - t1) / steps;
+    
+    for (size_t k = 0; k < steps; ++k) {
+        rhs(t, v, dv);
+        rk4(vout, v, dv, n, t, h);
+        //assert ((t+h) != t);
+        t += h;
+        for (size_t i = 0; i < n; ++i) {
+            v[i] = vout[i];
+        }
+    }
+
+    for (size_t i = 0; i < n; ++i) {
+        yout[i] = v[i];
+    }
+    
 }
 
 /* 
@@ -56,7 +84,7 @@ struct Parameters {
  * Calculates the right hand side of the magnetic pendulum's ODE.
  *
  */
-void derivs(const float t, const float y[], float yout[]) {
+void rhs(const float t, const float y[], float yout[]) {
     // Vector
     float phi = y[0], theta = y[1], phidot = y[2], thetadot = y[3];
 
@@ -162,8 +190,7 @@ void distances_to_magnets(const float *y, float *distances) {
 int find_magnet(float phi, float theta) {
     // Constants
     const float time_step = 5.0;
-    const int time_count = 5000;
-    const float time_dt = time_step / time_count;
+    const int time_count = 500;
     const int max_iterations = 30;
     const float min_kin = 0.5;
 
@@ -178,17 +205,14 @@ int find_magnet(float phi, float theta) {
         return -1;
 
     int last_magnet = -1;
-    float y_tmp[4], dydt[4];
+    float y_tmp[4];
     float dist[parameters.N];
 
     for (int iterations = 0; iterations < max_iterations; ++iterations) {
         // Solve ODE for t + time_step.
-        for (float t = 0; t < time_step; t += time_dt) {
-            derivs(t, y, dydt);
-            rk4(y_tmp, y, dydt, 4, t, time_dt, derivs);
-            for (int i = 0; i < 4; ++i)
-                y[i] = y_tmp[i];
-        }
+        rkdumb(y_tmp, y, 4, 0, time_step, time_count);
+        for (int i = 0; i < 4; ++i)
+            y[i] = y_tmp[i];
 
         // Find the magnet that is nearest.
         distances_to_magnets(y, dist);
@@ -226,7 +250,7 @@ int find_magnet(float phi, float theta) {
 
 float phi_from = 0.0, phi_to = 2*M_PI;
 float theta_from = 0.5 * M_PI, theta_to = M_PI;
-const int phi_steps = 400, theta_steps = 400;
+const int phi_steps = 100, theta_steps = 100;
 int magnets[phi_steps][theta_steps];
 ILubyte pixels[phi_steps * theta_steps * 3];
 ILubyte colors[3*3] = {255, 0, 0,
