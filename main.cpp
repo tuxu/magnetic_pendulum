@@ -214,7 +214,7 @@ void rk45(const float y[], const size_t n, const float t, const float dt,
      * maximum number of steps.
      */
     if (hmin < 0) {
-        hmin = dt / mxsteps;
+        hmin = dt / (mxsteps - 1);
     }
 
     // First try with given dt.
