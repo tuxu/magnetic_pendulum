@@ -527,12 +527,10 @@ void magnet_map() {
             int magnet = find_magnet(phi, theta);
             magnets[x][y] = magnet;
             if (magnet >= 0) {
-                pixels[3*phi_steps*y + 3*x + 0] = colors[3*magnet + 0];
-                pixels[3*phi_steps*y + 3*x + 1] = colors[3*magnet + 1];  
-                pixels[3*phi_steps*y + 3*x + 2] = colors[3*magnet + 2];  
-                /*pixels[3*phi_steps*y + 3*x + 0] = 255.0f*x/(float)phi_steps;
-                pixels[3*phi_steps*y + 3*x + 1] = 255.0f*y/(float)theta_steps;
-                pixels[3*phi_steps*y + 3*x + 2] = 255;*/
+                int index = 3 * (phi_steps * (theta_steps - y - 1) + x);
+                pixels[index + 0] = colors[3*magnet + 0];
+                pixels[index + 1] = colors[3*magnet + 1];  
+                pixels[index + 2] = colors[3*magnet + 2];  
             }
 
             cout << " = " << magnet << "     ";
