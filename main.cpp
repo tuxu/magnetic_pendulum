@@ -189,12 +189,33 @@ float rk45_error(const float y[], const float yh[], const float yerr[],
 /* 
  * Adaptive step width driver for rk45_step.
  *
+ * Parameters:
+ *       y -- starting vector
+ *       n -- number of components
+ *       t -- independent parameter
+ *      dt -- step to reach
+ *    atol -- absolute tolerance
+ *    rtol -- relative tolerance
+ * mxsteps -- maximum number of steps to do
+ *    hmin -- minimum helper step width
+ *
+ * Output:
+ *    yout -- Output vector
+ *
  */
 void rk45(const float y[], const size_t n, const float t, const float dt,
           float yout[],
-          const float atol, const float rtol, const size_t mxsteps = 5000) {
+          const float atol, const float rtol, const size_t mxsteps = 10000,
+          float hmin = -1) {
     const float safety = 0.9; // Safety factor.
     const float alpha = 0.2, minscale = 0.2, maxscale = 10.0;
+
+    /* h should not go below this value or the integration will exceed the
+     * maximum number of steps.
+     */
+    if (hmin < 0) {
+        hmin = dt / mxsteps;
+    }
 
     // First try with given dt.
     float h = dt;
@@ -213,11 +234,16 @@ void rk45(const float y[], const size_t n, const float t, const float dt,
     }
 
     bool last_rejected = false;
+    bool last_adjusted = true;
+
     // Walk through (t..t+dt) and adapt step width.
     for (size_t steps = 0; ; ++steps) {
         // Maximum steps used?
         if (steps > mxsteps) {
-            //cerr << "Used maximum number of steps!" << endl;
+            cerr << "Used maximum number of steps!" << endl;
+            cerr << "Remaining: " << (target_t - cur_t) << endl;
+            cerr << "h: " << h << endl;
+            //exit(1);
             break;
         }
 
@@ -230,15 +256,8 @@ void rk45(const float y[], const size_t n, const float t, const float dt,
         rk45_step(yt, dydt, n, cur_t, h, yt_out, dydt_out, yt_err);
         float err = rk45_error(yt, yt_out, yt_err, n, atol, rtol);
 
-        // But watch out, if h got too small.
-        /*if (t + hnew == t) {
-            //cerr << "Step width got below machine precision." << endl;
-        } else {
-            h = hnew;
-        }*/
-        
         float hnew, scale;
-        if (err <= 1) {
+        if (err <= 1 || !last_adjusted) {
             // Integration was successful. Compute a better h.
             if (err == 0) {
                 scale = maxscale;
@@ -266,7 +285,13 @@ void rk45(const float y[], const size_t n, const float t, const float dt,
             last_rejected = true;
         }
 
-        h = hnew;
+        if (hnew < hmin) {
+            //cerr << "h got too small, no adjustment." << endl;
+            last_adjusted = false;
+        } else {
+            h = hnew;
+            last_adjusted = true;
+        }
     }
 
     // Do the remaining step to reach target_t.
@@ -398,7 +423,7 @@ void distances_to_magnets(const float *y, float *distances) {
 int find_magnet(float phi, float theta) {
     // Constants
     const float time_step = 5.0;
-    const float atol = 1e-7, rtol = 1e-7;
+    const float atol = 1e-6, rtol = 1e-6;
     const int max_iterations = 30;
     const float min_kin = 0.5;
 
@@ -406,7 +431,7 @@ int find_magnet(float phi, float theta) {
     float y[] = { phi, theta, 0, 0 };
 
     // What to do for `theta' = 0 or pi?
-    float eps = 1e-9;
+    float eps = 1e-6;
     if (theta > M_PI-eps && theta < M_PI+eps)
         return -1;
     if (theta > -eps && theta < eps)
