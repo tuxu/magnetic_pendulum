@@ -1,3 +1,8 @@
+/*
+ *
+ *
+ */
+
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -8,17 +13,21 @@
 #include <cmath>
 #include <OpenCL/opencl.h>
 
-// --------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Constants
-// --------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 const char *kernel_filename = "magnetic_pendulum.cl";
 const bool use_gpu = true;
 
-// --------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Globals
-// --------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
+/*
+ * OpenCL
+ *
+ */
 int err;                // Error code
 cl_device_id device_id; // Compute device ID
 cl_context context;     // Compute context
@@ -26,10 +35,16 @@ cl_command_queue queue; // Command queue
 cl_program program;     // Compute program
 cl_kernel kernel;       // Compute kernel
 
+/*
+ * Magnetic Pendulum
+ *
+ */
+int *magnets;
 
-// --------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
 // Functions
-// --------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /*
  * Output an error message and quit.
@@ -63,7 +78,7 @@ std::string file_content(const char *filename) {
         content << line << std::endl;
     }
     
-    return content.str();
+	return content.str();
 }
 
 /*
@@ -90,6 +105,7 @@ void cl_init() {
     // Create a compute program from file.
     std::string source = file_content(kernel_filename);
     const char *str = source.c_str();
+
     program = clCreateProgramWithSource(context, 1,
                                         (const char **) &str,
                                         0, &err);
@@ -100,6 +116,7 @@ void cl_init() {
     err = clBuildProgram(program, 0, 0, "-Werror", 0, 0);
     if (err != CL_SUCCESS) {
         char *buffer;
+		
         for(size_t len = 256; ;) {
             buffer = new char[len];
             size_t sz;
