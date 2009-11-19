@@ -49,10 +49,10 @@ unsigned char colors[3 * 3] = {255, 0, 0,
 const float friction = 0.1;
 const int exponent = 2;
 const unsigned int n_magnets = 3;
-float alphas[3] = { 1.0, 1.0, 1.0 };
-float rns[9] = { -0.8660254, -0.5, -1.3,
-				  0.8660254, -0.5, -1.3,
-				  0.0, 1.0, -1.3 };
+float alphas[n_magnets] = { 1.0, 1.0, 1.0 };
+float rns[3 * n_magnets] = { -0.8660254, -0.5, -1.3,
+							  0.8660254, -0.5, -1.3,
+							  0.0, 1.0, -1.3 };
 
 
 // -----------------------------------------------------------------------------
@@ -69,10 +69,24 @@ void error(int code, const char *format, ...) {
 
     va_start(args, format);
     std::vsprintf(buf, format, args);
-    std::cerr << "Error " << code << ": " << buf << std::endl;
+    std::cerr << "!! Error " << code << ": " << buf << std::endl;
     va_end(args);
 
     std::exit(code);
+}
+
+/*
+ * Log a message.
+ *
+ */
+void log(const char *format, ...) {
+    char buf[512];
+    va_list args;
+	
+    va_start(args, format);
+    std::vsprintf(buf, format, args);
+    std::cout << "-- " << buf << std::endl;
+    va_end(args);
 }
 
 /*
@@ -99,23 +113,23 @@ std::string file_content(const char *filename) {
  *
  */
 void cl_init() {
-    // Connect to a compute device.
+	log("Connecting to a compute device ...");
     err = clGetDeviceIDs(0, use_gpu ? CL_DEVICE_TYPE_GPU : CL_DEVICE_TYPE_CPU,
                          1, &device_id, 0);
     if (err != CL_SUCCESS)
         error(200, "Failed to create a device group!");
 
-    // Create a compute context.
+    log("Creating a compute context ...");
     context = clCreateContext(0, 1, &device_id, 0, 0, &err);
     if (!context)
         error(201, "Failed to create a compute context!");
 
-    // Create a command queue.
+    log("Creating the command queue ...");
     queue = clCreateCommandQueue(context, device_id, 0, &err);
     if (!queue)
         error(202, "Failed to create a command queue!");
 
-    // Create a compute program from file.
+    log("Creating the compute program ...");
     std::string source = file_content(kernel_filename);
     const char *str = source.c_str();
 
@@ -125,7 +139,7 @@ void cl_init() {
     if (!program)
         error(203, "Failed to create compute program!");
 
-    // Build the program executable.
+    log("Building the program executable ...");
     err = clBuildProgram(program, 0, 0, "-Werror", 0, 0);
     if (err != CL_SUCCESS) {
         char *buffer;
@@ -158,10 +172,11 @@ void cl_init() {
     err = clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
                            sizeof(program_size), &program_size, 0);
     if (err == CL_SUCCESS) {
-        std::cout << "Program size: " << program_size << " bytes" << std::endl;
+        log("Binary size: %d bytes", program_size);
     }
 
-    // Create the compute kernel.
+    log("Creating the compute kernel ...");
+	
     kernel = clCreateKernel(program, "map_magnets", &err);
     if (!kernel || err != CL_SUCCESS)
         error(205, "Failed to create compute kernel");
@@ -172,6 +187,7 @@ void cl_init() {
  *
  */
 void cl_deinit() {
+	log("Freeing resources ...");
     clReleaseProgram(program);
     clReleaseKernel(kernel);
     clReleaseCommandQueue(queue);
@@ -203,6 +219,8 @@ void output_magnets(const int *magnets) {
  *
  */
 void save_image(const int *magnets, const char *filename) {
+	log("Saving magnet map to %s.", filename);
+	
 	// Create image.
 	ILubyte *pixels = new ILubyte[phi_steps * theta_steps * 3];
 	for (int y = 0; y < theta_steps; ++y) {
@@ -240,6 +258,7 @@ void save_image(const int *magnets, const char *filename) {
  */
 void magnet_map() {
 	// Create an array that maps a pixel to coordinates.
+	log("Creating the coordinate mapping array ...");
 	size_t coords_len = 2 * phi_steps * theta_steps;
 	float *coords = new float[coords_len];
 	
@@ -259,11 +278,11 @@ void magnet_map() {
         }
     }
 	
-	// Create an array holding the mapped magnets.
+	log("Creating an array to hold the mapped magnets ...");
 	size_t magnets_len = phi_steps * theta_steps;
 	int *magnets = new int[magnets_len];
 	
-	// Get device memory.
+	log("Asking for device memory ...");
 	cl_mem coords_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
 									  sizeof(float) * coords_len, 0, 0);
 	cl_mem alphas_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
@@ -276,7 +295,7 @@ void magnet_map() {
 		error(301, "Could not allocate device memory!");
 	}
 	
-	// Write coordinates.
+	log("Populating device with global parameters ...");
 	err  = clEnqueueWriteBuffer(queue, coords_cl, CL_TRUE, 0,
 							    sizeof(float) * coords_len, coords,
 							    0, 0, 0);
@@ -290,7 +309,7 @@ void magnet_map() {
 		error(302, "Could not write to device memory.");
 	}
 	
-	// Set compute kernel arguments.
+	log("Setting kernel arguments ...");
 	err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &coords_cl);
 	err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &magnets_cl);
 	err |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &magnets_len);
@@ -303,34 +322,42 @@ void magnet_map() {
 		error(303, "Could no set kernel parameters: %d", err);
 	}
 	
-	// Retrieve work group sizes.
+	log("Retrieving work group size ...");
 	size_t global, local;
 	err = clGetKernelWorkGroupInfo(kernel, device_id, CL_KERNEL_WORK_GROUP_SIZE,
 								   sizeof(size_t), &local, 0);
 	if (err != CL_SUCCESS) {
 		error(304, "Failed to retrieve kernel work group info: %d", err);
 	}
-	local = 64;
-	std::cout << "Local work group size: " << local << std::endl;
+	log("Maximum work group size is: %d", local);
 	
-	// Execute kernel over the entire range and using the maximum work group
-	// items.
+	
 	global = magnets_len;
+	while (global % local != 0) {
+		--local;
+	}
+	local = 64;
+	log("Work group sizes: local %d, global %d", local, global);
+	
+	log("Queuing calculation ...");
 	err = clEnqueueNDRangeKernel(queue, kernel, 1, 0, &global, &local,
 								 0, 0, 0);
 	if (err) {
 		error(305, "Failed to execute kernel: %d", err);
 	}
 	
-	// Wait for the kernel to finish.
-	clFinish(queue);
+	log("Waiting for the kernel to finish ...");
+	err = clFinish(queue);
+	if (err != CL_SUCCESS) {
+		error(306, "Error during kernel execution: %d", err);
+	}
 	
-	// Retrieve the magnet map.
+	log("Retrieving the results ...");
 	err = clEnqueueReadBuffer(queue, magnets_cl, CL_TRUE, 0,
 							  sizeof(int) * magnets_len, magnets,
 							  0, 0, 0);
 	if (err != CL_SUCCESS) {
-		error(306, "Failed to retrieve magnet map: %d", err);
+		error(307, "Failed to retrieve magnet map: %d", err);
 	}
 	
 	// Print the array.
@@ -338,6 +365,7 @@ void magnet_map() {
 	save_image(magnets, "output.tif");
 		
 	// Clean up.
+	log("Freeing device memory ...");
 	clReleaseMemObject(coords_cl);
 	clReleaseMemObject(magnets_cl);
 	clReleaseMemObject(alphas_cl);
