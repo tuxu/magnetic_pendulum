@@ -14,26 +14,12 @@
 // Integration tolerances
 const float atol = 1e-6, rtol = 1e-6;
 
-// Number of magnets
-const size_t N = 3;
-
-/* 
- * Structure containing experiment parameters.
- *
- */
-struct Parameters {
-    float gamma;            // Friction coefficient.
-    int exponent;           // Potential exponent.
-    float alphas[N];        // Array of magnet strengths.
-    float rns[3 * N];       /* Array of the correspondent magnet positions,
-                               magnet i's cartesian coordinates being
-                               x = 3 * i + 0, y = 3 * i + 1, z = 3 * i + 2.
-                             */
-} parameters = {0.1, 2, {1.0, 1.0, 1.0},
-				{-0.8660254, -0.5, -1.3,
-                  0.8660254, -0.5, -1.3,
-                  0.0, 1.0, -1.3 }
-			   };
+// Parameters
+float friction;
+float exponent;
+unsigned int n_magnets;
+__global float *alphas;
+__global float *rns;
 
 // -----------------------------------------------------------------------------
 // Prototypes
@@ -41,18 +27,31 @@ struct Parameters {
 void rk45(const float y[4], const float t, const float dt, float yout[4],
 		  const float atol, const float rtol, const size_t mxsteps, float hmin);
 
-int find_magnet(float phi, float theta);
+int find_magnet(const float phi, const float theta);
 
 
 // -----------------------------------------------------------------------------
 // Kernels
 // -----------------------------------------------------------------------------
 
-__kernel int map_magnets(__global float *coords,
+__kernel void map_magnets(__global float *coords,
 						 __global int *magnets,
-						 const unsigned int phi_steps,
-						 const unsigned int theta_steps) {
+						 const unsigned int magnets_len,
+						 const float friction_,
+						 const int exponent_,
+						 const unsigned int n_magnets_,
+						 __global float *alphas_,
+						 __global float *rns_) {
     int i = get_global_id(0);
+	
+	if (i >= magnets_len)
+		return;
+	
+	friction = friction_;
+	exponent = exponent_;
+	n_magnets = n_magnets_;
+	alphas = alphas_;
+	rns = rns_;
 	
 	// Fetch coordinates.
 	float phi = coords[2 * i + 0];
@@ -74,11 +73,6 @@ void rhs(const float t, const float y[4], float yout[4]) {
     // Vector
     float phi = y[0], theta = y[1], phidot = y[2], thetadot = y[3];
 
-    // Get boundary conditions.
-    float gamma = parameters.gamma;
-    float exponent = parameters.exponent;
-
-
     // Minimize trigonometric calculations.
     float cp = cos(phi);
     float sp = sin(phi);
@@ -89,12 +83,12 @@ void rhs(const float t, const float y[4], float yout[4]) {
     // Sum the magnet's contributions to the nominator.
     float sum_theta = 0;
     float sum_phi = 0;
-    for (int i = 0; i < N; ++i) {
+    for (int i = 0; i < n_magnets; ++i) {
         // Magnet coordinates and strength.
-        float x = parameters.rns[3 * i + 0];
-        float y = parameters.rns[3 * i + 1];
-        float z = parameters.rns[3 * i + 2];
-        float alpha = parameters.alphas[i];
+        float x = rns[3 * i + 0];
+        float y = rns[3 * i + 1];
+        float z = rns[3 * i + 2];
+        float alpha = alphas[i];
         // Denominator
         float A = pow(
                     pow(cp * st - x, 2.0f) +
@@ -108,8 +102,8 @@ void rhs(const float t, const float y[4], float yout[4]) {
     }
 
     // Evaluate second derivatives.
-    float thetadotdot = ct*st * phidot*phidot + st - gamma * thetadot - sum_theta;
-    float phidotdot = -gamma * st * phidot - 2.0/tt * thetadot * phidot - sum_phi;
+    float thetadotdot = ct*st * phidot*phidot + st - friction * thetadot - sum_theta;
+    float phidotdot = -friction * st * phidot - 2.0/tt * thetadot * phidot - sum_phi;
 
     // Return vector.
     yout[0] = phidot;
@@ -137,12 +131,12 @@ float get_potential(const float y[4]) {
     float st = sin(y[1]);
     
     float sum = 0;
-    for (int i = 0; i < N; ++i) {
-        sum += parameters.alphas[i] * pow(
-                pow(cp*st - parameters.rns[3*i+0], 2.0f) +
-                pow(sp*st - parameters.rns[3*i+1], 2.0f) +
-                pow(ct - parameters.rns[3*i+2], 2.0f),
-                parameters.exponent / 2.0f
+    for (int i = 0; i < n_magnets; ++i) {
+        sum += alphas[i] * pow(
+                pow(cp*st - rns[3*i+0], 2.0f) +
+                pow(sp*st - rns[3*i+1], 2.0f) +
+                pow(ct - rns[3*i+2], 2.0f),
+                exponent / 2.0f
                 );
     }
 
@@ -150,29 +144,11 @@ float get_potential(const float y[4]) {
 }
 
 /*
- * Returns the distances of the current position to the magnets.
- *
- */
-void distances_to_magnets(const float y[4], float distances[4]) {
-    float cp = cos(y[0]);
-    float sp = sin(y[0]);
-    float ct = cos(y[1]);
-    float st = sin(y[1]);
-    
-    for (int i = 0; i < N; ++i) {
-        float dx = cp*st - parameters.rns[3*i+0];
-        float dy = sp*st - parameters.rns[3*i+1];
-        float dz = ct - parameters.rns[3*i+2];
-        distances[i] = sqrt(dx*dx + dy*dy + dz*dz);
-    }
-}
-
-/*
  * Returns the magnet the pendulum be next to for large times and given
  * initial position `phi' and `theta'.
  *
  */
-int find_magnet(float phi, float theta) {
+int find_magnet(const float phi, const float theta) {
     // Constants
     const float time_step = 5.0;
     const int max_iterations = 30;
@@ -190,7 +166,6 @@ int find_magnet(float phi, float theta) {
 
     int last_magnet = -1;
     float y_tmp[4];
-    float dist[N];
 
     for (int iterations = 0; iterations < max_iterations; ++iterations) {
         // Solve ODE for t + time_step.
@@ -200,12 +175,22 @@ int find_magnet(float phi, float theta) {
             y[i] = y_tmp[i];
 
         // Find the magnet that is nearest.
-        distances_to_magnets(y, dist);
+		float cp = cos(y[0]);
+		float sp = sin(y[0]);
+		float ct = cos(y[1]);
+		float st = sin(y[1]);
         int magnet = -1;
         float min = -1;
-        for(int i = 0; i < N; ++i) {
-            if (min < 0 || dist[i] < min) {
-                min = dist[i];
+
+        for (int i = 0; i < n_magnets; ++i) {
+			// Calculate distance to magnet i.
+			float dx = cp*st - rns[3*i+0];
+			float dy = sp*st - rns[3*i+1];
+			float dz = ct - rns[3*i+2];
+			float dist = dx*dx + dy*dy + dz*dz;
+			
+            if (min < 0 || dist < min) {
+                min = dist;
                 magnet = i;
             }
         }
@@ -223,7 +208,7 @@ int find_magnet(float phi, float theta) {
             last_magnet = magnet;
         }
     }
-
+	
     return last_magnet;
 }
 

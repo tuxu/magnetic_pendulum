@@ -42,10 +42,18 @@ cl_kernel kernel;       // Compute kernel
  */
 const float phi_from = 0.0, phi_to = 2 * M_PI;
 const float theta_from = 0.5 * M_PI, theta_to = M_PI;
-const int phi_steps = 32, theta_steps = 32;
-ILubyte colors[3*3] = {255, 0, 0,
-					   0, 255, 0,
-					   0, 0, 255 };
+const int phi_steps = 64, theta_steps = 64;
+unsigned char colors[3 * 3] = {255, 0, 0,
+							   0, 255, 0,
+							   0, 0, 255 };
+const float friction = 0.1;
+const int exponent = 2;
+const unsigned int n_magnets = 3;
+float alphas[3] = { 1.0, 1.0, 1.0 };
+float rns[9] = { -0.8660254, -0.5, -1.3,
+				  0.8660254, -0.5, -1.3,
+				  0.0, 1.0, -1.3 };
+
 
 // -----------------------------------------------------------------------------
 // Functions
@@ -256,20 +264,28 @@ void magnet_map() {
 	int *magnets = new int[magnets_len];
 	
 	// Get device memory.
-	cl_mem coords_cl;
-	cl_mem magnets_cl;
-	coords_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
-							   sizeof(float) * coords_len, 0, 0);
-	magnets_cl = clCreateBuffer(context, CL_MEM_WRITE_ONLY, 
-								sizeof(int) * magnets_len, 0, 0);
-	if (!magnets_cl || !coords_cl) {
+	cl_mem coords_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
+									  sizeof(float) * coords_len, 0, 0);
+	cl_mem alphas_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
+									  sizeof(float) * n_magnets, 0, 0);
+	cl_mem rns_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
+								   sizeof(float) * 3 * n_magnets, 0, 0);
+	cl_mem magnets_cl = clCreateBuffer(context, CL_MEM_WRITE_ONLY, 
+									   sizeof(int) * magnets_len, 0, 0);
+	if (!magnets_cl || !coords_cl || !alphas_cl || !rns_cl) {
 		error(301, "Could not allocate device memory!");
 	}
 	
 	// Write coordinates.
-	err = clEnqueueWriteBuffer(queue, coords_cl, CL_TRUE, 0,
-							   sizeof(float) * coords_len, coords,
-							   0, 0, 0);
+	err  = clEnqueueWriteBuffer(queue, coords_cl, CL_TRUE, 0,
+							    sizeof(float) * coords_len, coords,
+							    0, 0, 0);
+	err |= clEnqueueWriteBuffer(queue, alphas_cl, CL_TRUE, 0,
+							    sizeof(float) * n_magnets, alphas,
+							    0, 0, 0);
+	err |= clEnqueueWriteBuffer(queue, rns_cl, CL_TRUE, 0,
+							    sizeof(float) * 3 * n_magnets, rns,
+							    0, 0, 0);
 	if (err != CL_SUCCESS) {
 		error(302, "Could not write to device memory.");
 	}
@@ -277,8 +293,12 @@ void magnet_map() {
 	// Set compute kernel arguments.
 	err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &coords_cl);
 	err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &magnets_cl);
-	err |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &phi_steps);
-	err |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &theta_steps);
+	err |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &magnets_len);
+	err |= clSetKernelArg(kernel, 3, sizeof(float), &friction);
+	err |= clSetKernelArg(kernel, 4, sizeof(int), &exponent);
+	err |= clSetKernelArg(kernel, 5, sizeof(unsigned int), &n_magnets);
+	err |= clSetKernelArg(kernel, 6, sizeof(cl_mem), &alphas_cl);
+	err |= clSetKernelArg(kernel, 7, sizeof(cl_mem), &rns_cl);
 	if (err != CL_SUCCESS) {
 		error(303, "Could no set kernel parameters: %d", err);
 	}
@@ -290,6 +310,8 @@ void magnet_map() {
 	if (err != CL_SUCCESS) {
 		error(304, "Failed to retrieve kernel work group info: %d", err);
 	}
+	local = 64;
+	std::cout << "Local work group size: " << local << std::endl;
 	
 	// Execute kernel over the entire range and using the maximum work group
 	// items.
@@ -308,7 +330,7 @@ void magnet_map() {
 							  sizeof(int) * magnets_len, magnets,
 							  0, 0, 0);
 	if (err != CL_SUCCESS) {
-		error(306, "Failed to retrieve magnet map.");
+		error(306, "Failed to retrieve magnet map: %d", err);
 	}
 	
 	// Print the array.
@@ -318,6 +340,8 @@ void magnet_map() {
 	// Clean up.
 	clReleaseMemObject(coords_cl);
 	clReleaseMemObject(magnets_cl);
+	clReleaseMemObject(alphas_cl);
+	clReleaseMemObject(rns_cl);
 	delete[] coords;
 	delete[] magnets;
 }
