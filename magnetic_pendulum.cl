@@ -14,6 +14,9 @@
 // Integration tolerances
 const float atol = 1e-6, rtol = 1e-6;
 
+// Number of magnets
+const size_t N = 3;
+
 /* 
  * Structure containing experiment parameters.
  *
@@ -21,20 +24,22 @@ const float atol = 1e-6, rtol = 1e-6;
 struct Parameters {
     float gamma;            // Friction coefficient.
     int exponent;           // Potential exponent.
-    int N;                  // Number of magnets.
-    float *alphas;          // Array of magnet strengths.
-    float *rns;             /* Array of the correspondent magnet positions,
+    float alphas[N];        // Array of magnet strengths.
+    float rns[3 * N];       /* Array of the correspondent magnet positions,
                                magnet i's cartesian coordinates being
                                x = 3 * i + 0, y = 3 * i + 1, z = 3 * i + 2.
                              */
-} parameters;
+} parameters = {0.1, 2, {1.0, 1.0, 1.0},
+				{-0.8660254, -0.5, -1.3,
+                  0.8660254, -0.5, -1.3,
+                  0.0, 1.0, -1.3 }
+			   };
 
 // -----------------------------------------------------------------------------
 // Prototypes
 // -----------------------------------------------------------------------------
-void rk45(const float y[], const size_t n, const float t, const float dt,
-          float yout[], const float atol, const float rtol,
-          const size_t mxsteps, float hmin);
+void rk45(const float y[4], const float t, const float dt, float yout[4],
+		  const float atol, const float rtol, const size_t mxsteps, float hmin);
 
 int find_magnet(float phi, float theta);
 
@@ -43,9 +48,17 @@ int find_magnet(float phi, float theta);
 // Kernels
 // -----------------------------------------------------------------------------
 
-__kernel int square(__global float *input, __global float *output,
-                    const unsigned int count) {
+__kernel int map_magnets(__global float *coords,
+						 __global int *magnets,
+						 const unsigned int phi_steps,
+						 const unsigned int theta_steps) {
     int i = get_global_id(0);
+	
+	// Fetch coordinates.
+	float phi = coords[2 * i + 0];
+	float theta = coords[2 * i + 1];
+	
+	magnets[i] = find_magnet(phi, theta);
 }
 
 
@@ -57,15 +70,14 @@ __kernel int square(__global float *input, __global float *output,
  * Calculates the right hand side of the magnetic pendulum's ODE.
  *
  */
-void rhs(const float t, const float y[], float yout[]) {
+void rhs(const float t, const float y[4], float yout[4]) {
     // Vector
     float phi = y[0], theta = y[1], phidot = y[2], thetadot = y[3];
 
     // Get boundary conditions.
     float gamma = parameters.gamma;
     float exponent = parameters.exponent;
-    int N = parameters.N;
-    float *alphas = parameters.alphas, *rns = parameters.rns;
+
 
     // Minimize trigonometric calculations.
     float cp = cos(phi);
@@ -79,10 +91,10 @@ void rhs(const float t, const float y[], float yout[]) {
     float sum_phi = 0;
     for (int i = 0; i < N; ++i) {
         // Magnet coordinates and strength.
-        float x = rns[3*i+0];
-        float y = rns[3*i+1];
-        float z = rns[3*i+2];
-        float alpha = alphas[i];
+        float x = parameters.rns[3 * i + 0];
+        float y = parameters.rns[3 * i + 1];
+        float z = parameters.rns[3 * i + 2];
+        float alpha = parameters.alphas[i];
         // Denominator
         float A = pow(
                     pow(cp * st - x, 2.0f) +
@@ -110,7 +122,7 @@ void rhs(const float t, const float y[], float yout[]) {
  * Returns the kinetic energy of the system.
  *
  */
-float get_kinetic(const float *y) {
+float get_kinetic(const float y[4]) {
     return 0.5 * (y[3]*y[3] + sin(y[1])*sin(y[1]) * y[2]*y[2]);
 }
 
@@ -118,14 +130,14 @@ float get_kinetic(const float *y) {
  * Returns the potential energy of the system.
  *
  */
-float get_potential(const float *y) {
+float get_potential(const float y[4]) {
     float cp = cos(y[0]);
     float sp = sin(y[0]);
     float ct = cos(y[1]);
     float st = sin(y[1]);
     
     float sum = 0;
-    for (int i = 0; i < parameters.N; ++i) {
+    for (int i = 0; i < N; ++i) {
         sum += parameters.alphas[i] * pow(
                 pow(cp*st - parameters.rns[3*i+0], 2.0f) +
                 pow(sp*st - parameters.rns[3*i+1], 2.0f) +
@@ -141,13 +153,13 @@ float get_potential(const float *y) {
  * Returns the distances of the current position to the magnets.
  *
  */
-void distances_to_magnets(const float *y, float *distances) {
+void distances_to_magnets(const float y[4], float distances[4]) {
     float cp = cos(y[0]);
     float sp = sin(y[0]);
     float ct = cos(y[1]);
     float st = sin(y[1]);
     
-    for (int i = 0; i < parameters.N; ++i) {
+    for (int i = 0; i < N; ++i) {
         float dx = cp*st - parameters.rns[3*i+0];
         float dy = sp*st - parameters.rns[3*i+1];
         float dz = ct - parameters.rns[3*i+2];
@@ -167,7 +179,7 @@ int find_magnet(float phi, float theta) {
     const float min_kin = 0.5;
 
     // Starting vector.
-    float y[] = { phi, theta, 0, 0 };
+    float y[4] = { phi, theta, 0, 0 };
 
     // What to do for `theta' = 0 or pi?
     float eps = 1e-6;
@@ -178,11 +190,11 @@ int find_magnet(float phi, float theta) {
 
     int last_magnet = -1;
     float y_tmp[4];
-    float dist[parameters.N];
+    float dist[N];
 
     for (int iterations = 0; iterations < max_iterations; ++iterations) {
         // Solve ODE for t + time_step.
-        rk45(y, 4, 0, time_step, y_tmp, atol, rtol, 10000, -1);
+        rk45(y, 0, time_step, y_tmp, atol, rtol, 10000, -1);
 
         for (int i = 0; i < 4; ++i)
             y[i] = y_tmp[i];
@@ -191,7 +203,7 @@ int find_magnet(float phi, float theta) {
         distances_to_magnets(y, dist);
         int magnet = -1;
         float min = -1;
-        for(int i = 0; i < parameters.N; ++i) {
+        for(int i = 0; i < N; ++i) {
             if (min < 0 || dist[i] < min) {
                 min = dist[i];
                 magnet = i;
@@ -226,7 +238,6 @@ int find_magnet(float phi, float theta) {
  * Parameters:
  *       y -- y(t)
  *    dydt -- y'(t, y)
- *       n -- number of vector elements
  *       t -- t
  *       h -- step width
  * Output:
@@ -235,9 +246,9 @@ int find_magnet(float phi, float theta) {
  *    yerr -- difference of 5th and 4th order solution
  *
  */
-void rk45_step(const float y[], const float dydt[], const size_t n,
+void rk45_step(const float y[4], const float dydt[4],
                const float t, const float h,
-               float yout[], float dydtout[], float yerr[]) {
+               float yout[4], float dydtout[4], float yerr[4]) {
     // Coefficients
     // <http://en.wikipedia.org/wiki/Dormand-Prince>
     const float c2 = 1./5, c3 = 3./10, c4 = 4./5, c5 = 8./9;
@@ -257,66 +268,64 @@ void rk45_step(const float y[], const float dydt[], const size_t n,
     const float b1 = 35./384, b3 = 500./1113, b4 = 125./192,
                 b5 = -2187./6784, b6 = 11./84;
 
-    float tmp[n];
+    float tmp[4];
 
-    // Slope 1
-    const float *k1 = dydt;
+    // Slope 1: k1 = dydt
 
     // Slope 2
-    float k2[n];
-    for (size_t i = 0; i < n; ++i) {
-        tmp[i] = y[i] + a21 * h * k1[i];
+    float k2[4];
+    for (size_t i = 0; i < 4; ++i) {
+        tmp[i] = y[i] + a21 * h * dydt[i];
     }
     rhs(t + c2 * h, tmp, k2);
 
     // Slope 3
-    float k3[n];
-    for (size_t i = 0; i < n; ++i) {
-        tmp[i] = y[i] + h * (a31 * k1[i] + a32 * k2[i]);
+    float k3[4];
+    for (size_t i = 0; i < 4; ++i) {
+        tmp[i] = y[i] + h * (a31 * dydt[i] + a32 * k2[i]);
     }
     rhs(t + c3 * h, tmp, k3);
 
     // Slope 4
-    float k4[n];
-    for (size_t i = 0; i < n; ++i) {
-        tmp[i] = y[i] + h * (a41 * k1[i] + a42 * k2[i] + a43 * k3[i]);
+    float k4[4];
+    for (size_t i = 0; i < 4; ++i) {
+        tmp[i] = y[i] + h * (a41 * dydt[i] + a42 * k2[i] + a43 * k3[i]);
     }
     rhs(t + c4 * h, tmp, k4);
 
     // Slope 5
-    float k5[n];
-    for (size_t i = 0; i < n; ++i) {
-        tmp[i] = y[i] + h * (a51 * k1[i] + a52 * k2[i] + a53 * k3[i] + 
+    float k5[4];
+    for (size_t i = 0; i < 4; ++i) {
+        tmp[i] = y[i] + h * (a51 * dydt[i] + a52 * k2[i] + a53 * k3[i] + 
                              a54 * k4[i]);
     }
     rhs(t + c5 * h, tmp, k5);
 
     // Slope 6
-    float k6[n];
-    for (size_t i = 0; i < n; ++i) {
-        tmp[i] = y[i] + h * (a61 * k1[i] + a62 * k2[i] + a63 * k3[i] +
+    float k6[4];
+    for (size_t i = 0; i < 4; ++i) {
+        tmp[i] = y[i] + h * (a61 * dydt[i] + a62 * k2[i] + a63 * k3[i] +
                              a64 * k4[i] + a65 * k5[i]);
     }
     rhs(t + h, tmp, k6);
 
     // Slope 7
     // use FSAL trick to avoid one extra function evaluation
-    float *k7 = dydtout;
-    for (size_t i = 0; i < n; ++i) {
-        tmp[i] = y[i] + h * (a71 * k1[i]               + a73 * k3[i] +
+    for (size_t i = 0; i < 4; ++i) {
+        tmp[i] = y[i] + h * (a71 * dydt[i]               + a73 * k3[i] +
                              a74 * k4[i] + a75 * k5[i] + a76 * k6[i]);
     }
-    rhs(t + h, tmp, k7);
+    rhs(t + h, tmp, dydtout);
 
     // Solutions
-    float yt_r[n];
-    for (size_t i = 0; i < n; ++i) {
+    float yt_r[4];
+    for (size_t i = 0; i < 4; ++i) {
         // 4th order solution
-        yt_r[i] = y[i] + h * (b1r * k1[i]               + b3r * k3[i] +
+        yt_r[i] = y[i] + h * (b1r * dydt[i]               + b3r * k3[i] +
                               b4r * k4[i] + b5r * k5[i] + b6r * k6[i] +
-                              b7r * k7[i]);
+                              b7r * dydtout[i]);
         // 5th order solution
-        yout[i] = y[i] + h * (b1 * k1[i]              + b3 * k3[i] +
+        yout[i] = y[i] + h * (b1 * dydt[i]              + b3 * k3[i] +
                               b4 * k4[i] + b5 * k5[i] + b6 * k6[i]);
         // Error estimation
         yerr[i] = yout[i] - yt_r[i];
@@ -329,16 +338,16 @@ void rk45_step(const float y[], const float dydt[], const size_t n,
  *
  */
 float rk45_error(const float y[], const float yh[], const float yerr[],
-                 const size_t n, const float atol, const float rtol) {
+                 const float atol, const float rtol) {
     float err = 0;
-    for (size_t i = 0; i < n; ++i) {
+    for (size_t i = 0; i < 4; ++i) {
         // scale = atol + max(y,yh) * rtol
         float scale = atol + rtol * fmax(fabs(y[i]), fabs(yh[i]));
         float w = (yerr[i] / scale);
         err += w * w;
     }
 
-    return sqrt(err / n);
+    return sqrt(err / 4);
 }
 
 /* 
@@ -346,7 +355,6 @@ float rk45_error(const float y[], const float yh[], const float yerr[],
  *
  * Parameters:
  *       y -- starting vector
- *       n -- number of components
  *       t -- independent parameter
  *      dt -- step to reach
  *    atol -- absolute tolerance
@@ -358,10 +366,9 @@ float rk45_error(const float y[], const float yh[], const float yerr[],
  *    yout -- Output vector
  *
  */
-void rk45(const float y[], const size_t n, const float t, const float dt,
-          float yout[],
+void rk45(const float y[4], const float t, const float dt, float yout[4],
           const float atol, const float rtol, const size_t mxsteps,
-          float hmin) {
+		  float hmin) {
     const float safety = 0.9; // Safety factor.
     const float alpha = 0.2, minscale = 0.2, maxscale = 10.0;
 
@@ -379,12 +386,12 @@ void rk45(const float y[], const size_t n, const float t, const float dt,
     float target_t = t + dt;
 
     // Preparation
-    float dydt[n], dydt_out[n];
-    float yt[n], yt_out[n];
-    float yt_err[n];
+    float dydt[4], dydt_out[4];
+    float yt[4], yt_out[4];
+    float yt_err[4];
 
     rhs(t, y, dydt);
-    for (size_t i = 0; i < n; ++i) {
+    for (size_t i = 0; i < 4; ++i) {
         yt[i] = y[i];        
     }
 
@@ -407,8 +414,8 @@ void rk45(const float y[], const size_t n, const float t, const float dt,
         }
 
         // Do an actual integration step.
-        rk45_step(yt, dydt, n, cur_t, h, yt_out, dydt_out, yt_err);
-        float err = rk45_error(yt, yt_out, yt_err, n, atol, rtol);
+        rk45_step(yt, dydt, cur_t, h, yt_out, dydt_out, yt_err);
+        float err = rk45_error(yt, yt_out, yt_err, atol, rtol);
 
         float hnew, scale;
         if (err <= 1 || !last_adjusted) {
@@ -428,7 +435,7 @@ void rk45(const float y[], const size_t n, const float t, const float dt,
             last_rejected = false;
             
             cur_t += h;
-            for (size_t i = 0; i < n; ++i) {
+            for (size_t i = 0; i < 4; ++i) {
                 yt[i] = yt_out[i];
                 dydt[i] = dydt_out[i];
             }
@@ -449,7 +456,7 @@ void rk45(const float y[], const size_t n, const float t, const float dt,
     }
 
     // Do the remaining step to reach target_t.
-    rk45_step(yt, dydt, n, cur_t, target_t - cur_t, yout, dydt_out, yt_err);
+    rk45_step(yt, dydt, cur_t, target_t - cur_t, yout, dydt_out, yt_err);
 }
 
 
