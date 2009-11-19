@@ -1,5 +1,6 @@
 /*
  * OpenCL kernel for the Magnetic Pendulum 
+ * (c) 2009, Tino Wagner
  *
  */
 

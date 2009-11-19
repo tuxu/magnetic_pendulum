@@ -1,5 +1,6 @@
 /*
- *
+ * Magnetic Pendulum for OpenCL
+ * (c) 2009, Tino Wagner
  *
  */
 
