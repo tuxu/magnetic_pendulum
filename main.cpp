@@ -278,9 +278,25 @@ void magnet_map() {
         }
     }
 	
-	log("Creating an array to hold the mapped magnets ...");
+	log("Retrieving work group size ...");
+	size_t global, local;
+	err = clGetKernelWorkGroupInfo(kernel, device_id, CL_KERNEL_WORK_GROUP_SIZE,
+								   sizeof(size_t), &local, 0);
+	if (err != CL_SUCCESS) {
+		error(304, "Failed to retrieve kernel work group info: %d", err);
+	}
+	log("Maximum work group size is: %d", local);
+	
 	size_t magnets_len = phi_steps * theta_steps;
-	int *magnets = new int[magnets_len];
+	if (magnets_len % local == 0)
+		global = magnets_len;
+	else
+		global = (magnets_len / local + 1) * local;
+	
+	log("Work group sizes: local %d, global %d", local, global);
+	
+	log("Creating an array to hold the mapped magnets ...");
+	int *magnets = new int[global];
 	
 	log("Asking for device memory ...");
 	cl_mem coords_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
@@ -321,23 +337,6 @@ void magnet_map() {
 	if (err != CL_SUCCESS) {
 		error(303, "Could no set kernel parameters: %d", err);
 	}
-	
-	log("Retrieving work group size ...");
-	size_t global, local;
-	err = clGetKernelWorkGroupInfo(kernel, device_id, CL_KERNEL_WORK_GROUP_SIZE,
-								   sizeof(size_t), &local, 0);
-	if (err != CL_SUCCESS) {
-		error(304, "Failed to retrieve kernel work group info: %d", err);
-	}
-	log("Maximum work group size is: %d", local);
-	
-	
-	global = magnets_len;
-	while (global % local != 0) {
-		--local;
-	}
-	local = 64;
-	log("Work group sizes: local %d, global %d", local, global);
 	
 	log("Queuing calculation ...");
 	err = clEnqueueNDRangeKernel(queue, kernel, 1, 0, &global, &local,
