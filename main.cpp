@@ -224,13 +224,21 @@ void save_image(const int *magnets, const char *filename) {
 	
 	// Create image.
 	ILubyte *pixels = new ILubyte[phi_steps * theta_steps * 3];
+	float r, g, b;
 	for (int y = 0; y < theta_steps; ++y) {
         for (int x = 0; x < phi_steps; ++x) {
 			int magnet = magnets[y * phi_steps + x];
+			if (magnet < 0) {
+				r = g = b = 0;
+			} else {
+				r = colors[3 * magnet + 0];
+				g = colors[3 * magnet + 1];
+				b = colors[3 * magnet + 2];
+			}
 			int index = 3 * (phi_steps * (theta_steps - y - 1) + x);
-			pixels[index + 0] = colors[3 * magnet + 0];
-			pixels[index + 1] = colors[3 * magnet + 1];  
-			pixels[index + 2] = colors[3 * magnet + 2];
+			pixels[index + 0] = r;
+			pixels[index + 1] = g;  
+			pixels[index + 2] = b;
         }
     }
 	
