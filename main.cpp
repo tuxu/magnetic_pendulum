@@ -46,15 +46,15 @@ const float phi_from = 0.0, phi_to = 2 * M_PI;
 const float theta_from = 0.5 * M_PI, theta_to = M_PI;
 const int phi_steps = 128, theta_steps = 128;
 unsigned char colors[3 * 3] = {255, 0, 0,
-							   0, 255, 0,
-							   0, 0, 255 };
+                               0, 255, 0,
+                               0, 0, 255 };
 const float friction = 0.1;
 const int exponent = 2;
 const unsigned int n_magnets = 3;
 float alphas[n_magnets] = { 1.0, 1.0, 1.0 };
 float rns[3 * n_magnets] = { -0.8660254, -0.5, -1.3,
-							  0.8660254, -0.5, -1.3,
-							  0.0, 1.0, -1.3 };
+                              0.8660254, -0.5, -1.3,
+                              0.0, 1.0, -1.3 };
 
 
 // -----------------------------------------------------------------------------
@@ -84,7 +84,7 @@ void error(int code, const char *format, ...) {
 void log(const char *format, ...) {
     char buf[512];
     va_list args;
-	
+    
     va_start(args, format);
     std::vsprintf(buf, format, args);
     std::cout << "-- " << buf << std::endl;
@@ -107,7 +107,7 @@ std::string file_content(const char *filename) {
         content << line << std::endl;
     }
     
-	return content.str();
+    return content.str();
 }
 
 /*
@@ -115,7 +115,7 @@ std::string file_content(const char *filename) {
  *
  */
 void cl_init() {
-	log("Connecting to a compute device ...");
+    log("Connecting to a compute device ...");
     err = clGetDeviceIDs(0, use_gpu ? CL_DEVICE_TYPE_GPU : CL_DEVICE_TYPE_CPU,
                          1, &device_id, 0);
     if (err != CL_SUCCESS)
@@ -145,7 +145,7 @@ void cl_init() {
     err = clBuildProgram(program, 0, 0, "-Werror", 0, 0);
     if (err != CL_SUCCESS) {
         char *buffer;
-		
+        
         for(size_t len = 256; ;) {
             buffer = new char[len];
             size_t sz;
@@ -178,7 +178,7 @@ void cl_init() {
     }
 
     log("Creating the compute kernel ...");
-	
+    
     kernel = clCreateKernel(program, "map_magnets", &err);
     if (!kernel || err != CL_SUCCESS)
         error(205, "Failed to create compute kernel");
@@ -189,7 +189,7 @@ void cl_init() {
  *
  */
 void cl_deinit() {
-	log("Freeing resources ...");
+    log("Freeing resources ...");
     clReleaseProgram(program);
     clReleaseKernel(kernel);
     clReleaseCommandQueue(queue);
@@ -209,11 +209,11 @@ void output_magnets(const int *magnets) {
                 case 1: c = '#'; break;
                 case 2: c = '+'; break;
             }
-			std::cout << c;
+            std::cout << c;
         }
-		std::cout << std::endl;
+        std::cout << std::endl;
     }
-	std::cout << std::endl;
+    std::cout << std::endl;
 }
 
 /*
@@ -221,29 +221,29 @@ void output_magnets(const int *magnets) {
  *
  */
 void save_image(const int *magnets, const char *filename) {
-	log("Saving magnet map to %s.", filename);
-	
-	// Create image.
-	ILubyte *pixels = new ILubyte[phi_steps * theta_steps * 3];
-	float r, g, b;
-	for (int y = 0; y < theta_steps; ++y) {
+    log("Saving magnet map to %s.", filename);
+    
+    // Create image.
+    ILubyte *pixels = new ILubyte[phi_steps * theta_steps * 3];
+    float r, g, b;
+    for (int y = 0; y < theta_steps; ++y) {
         for (int x = 0; x < phi_steps; ++x) {
-			int magnet = magnets[y * phi_steps + x];
-			if (magnet < 0) {
-				r = g = b = 0;
-			} else {
-				r = colors[3 * magnet + 0];
-				g = colors[3 * magnet + 1];
-				b = colors[3 * magnet + 2];
-			}
-			int index = 3 * (phi_steps * (theta_steps - y - 1) + x);
-			pixels[index + 0] = r;
-			pixels[index + 1] = g;  
-			pixels[index + 2] = b;
+            int magnet = magnets[y * phi_steps + x];
+            if (magnet < 0) {
+                r = g = b = 0;
+            } else {
+                r = colors[3 * magnet + 0];
+                g = colors[3 * magnet + 1];
+                b = colors[3 * magnet + 2];
+            }
+            int index = 3 * (phi_steps * (theta_steps - y - 1) + x);
+            pixels[index + 0] = r;
+            pixels[index + 1] = g;  
+            pixels[index + 2] = b;
         }
     }
-	
-	// Save to file.
+    
+    // Save to file.
     if (ilGetInteger(IL_VERSION_NUM) < IL_VERSION) {
         printf("DevIL version is different...exiting!\n");
     }    
@@ -258,8 +258,8 @@ void save_image(const int *magnets, const char *filename) {
     while (ILenum Error = ilGetError()) {
         printf("Error: 0x%X\n", (unsigned int)Error);
     }
-	
-	delete [] pixels;
+    
+    delete [] pixels;
 }
 
 /*
@@ -267,11 +267,11 @@ void save_image(const int *magnets, const char *filename) {
  *
  */
 void magnet_map() {
-	// Create an array that maps a pixel to coordinates.
-	log("Creating the coordinate mapping array ...");
-	size_t coords_len = 2 * phi_steps * theta_steps;
-	float *coords = new float[coords_len];
-	
+    // Create an array that maps a pixel to coordinates.
+    log("Creating the coordinate mapping array ...");
+    size_t coords_len = 2 * phi_steps * theta_steps;
+    float *coords = new float[coords_len];
+    
     float dphi = (phi_to - phi_from) / (phi_steps - 1);
     float dtheta = (theta_to - theta_from) / (theta_steps - 1);
     
@@ -280,73 +280,73 @@ void magnet_map() {
             // Determine current position.
             float phi = phi_from + i * dphi;
             float theta = theta_from + j * dtheta;
-			
-			// Map the current pixel to the position.
-			int index = 2 * (phi_steps * j + i);
-			coords[index + 0] = phi;
-			coords[index + 1] = theta;
+            
+            // Map the current pixel to the position.
+            int index = 2 * (phi_steps * j + i);
+            coords[index + 0] = phi;
+            coords[index + 1] = theta;
         }
     }
     
     unsigned int compute_units;
     err = clGetDeviceInfo(device_id, CL_DEVICE_MAX_COMPUTE_UNITS,
                           sizeof(unsigned int), &compute_units, 0);
-	if (err != CL_SUCCESS) {
-		error(304, "Failed to retrieve compute unit information: %d", err);
-	}
+    if (err != CL_SUCCESS) {
+        error(304, "Failed to retrieve compute unit information: %d", err);
+    }
     log("Maximum compute units: %d", compute_units);
-	
-	size_t local;
-	err = clGetKernelWorkGroupInfo(kernel, device_id, CL_KERNEL_WORK_GROUP_SIZE,
-								   sizeof(size_t), &local, 0);
-	if (err != CL_SUCCESS) {
-		error(304, "Failed to retrieve kernel work group info: %d", err);
-	}
-	log("Maximum work group size: %d", local);
-	
+    
+    size_t local;
+    err = clGetKernelWorkGroupInfo(kernel, device_id, CL_KERNEL_WORK_GROUP_SIZE,
+                                   sizeof(size_t), &local, 0);
+    if (err != CL_SUCCESS) {
+        error(304, "Failed to retrieve kernel work group info: %d", err);
+    }
+    log("Maximum work group size: %d", local);
+    
     size_t cycle_len = compute_units * local;
     size_t n_cycles = (phi_steps * theta_steps) / cycle_len + 1;
     size_t magnets_cl_len = n_cycles * cycle_len;
-	log("Using %d cycles with a length of %d.", n_cycles, cycle_len);
-	
-	log("Asking for device memory ...");
-	cl_mem coords_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
-									  sizeof(float) * coords_len, 0, 0);
-	cl_mem alphas_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
-									  sizeof(float) * n_magnets, 0, 0);
-	cl_mem rns_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
-								   sizeof(float) * 3 * n_magnets, 0, 0);
-	cl_mem magnets_cl = clCreateBuffer(context, CL_MEM_WRITE_ONLY, 
-									   sizeof(int) * magnets_cl_len, 0, 0);
-	if (!magnets_cl || !coords_cl || !alphas_cl || !rns_cl) {
-		error(301, "Could not allocate device memory!");
-	}
-	
-	log("Populating device with global parameters ...");
-	err  = clEnqueueWriteBuffer(queue, coords_cl, CL_TRUE, 0,
-							    sizeof(float) * coords_len, coords,
-							    0, 0, 0);
-	err |= clEnqueueWriteBuffer(queue, alphas_cl, CL_TRUE, 0,
-							    sizeof(float) * n_magnets, alphas,
-							    0, 0, 0);
-	err |= clEnqueueWriteBuffer(queue, rns_cl, CL_TRUE, 0,
-							    sizeof(float) * 3 * n_magnets, rns,
-							    0, 0, 0);
-	if (err != CL_SUCCESS) {
-		error(302, "Could not write to device memory.");
-	}
-	
-	//log("Setting kernel arguments ...");
-	err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &coords_cl);
-	err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &magnets_cl);
-	err |= clSetKernelArg(kernel, 4, sizeof(float), &friction);
-	err |= clSetKernelArg(kernel, 5, sizeof(int), &exponent);
-	err |= clSetKernelArg(kernel, 6, sizeof(unsigned int), &n_magnets);
-	err |= clSetKernelArg(kernel, 7, sizeof(cl_mem), &alphas_cl);
-	err |= clSetKernelArg(kernel, 8, sizeof(cl_mem), &rns_cl);
-	if (err != CL_SUCCESS) {
-		error(303, "Could no set kernel parameters: %d", err);
-	}
+    log("Using %d cycles with a length of %d.", n_cycles, cycle_len);
+    
+    log("Asking for device memory ...");
+    cl_mem coords_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
+                                      sizeof(float) * coords_len, 0, 0);
+    cl_mem alphas_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
+                                      sizeof(float) * n_magnets, 0, 0);
+    cl_mem rns_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
+                                   sizeof(float) * 3 * n_magnets, 0, 0);
+    cl_mem magnets_cl = clCreateBuffer(context, CL_MEM_WRITE_ONLY, 
+                                       sizeof(int) * magnets_cl_len, 0, 0);
+    if (!magnets_cl || !coords_cl || !alphas_cl || !rns_cl) {
+        error(301, "Could not allocate device memory!");
+    }
+    
+    log("Populating device with global parameters ...");
+    err  = clEnqueueWriteBuffer(queue, coords_cl, CL_TRUE, 0,
+                                sizeof(float) * coords_len, coords,
+                                0, 0, 0);
+    err |= clEnqueueWriteBuffer(queue, alphas_cl, CL_TRUE, 0,
+                                sizeof(float) * n_magnets, alphas,
+                                0, 0, 0);
+    err |= clEnqueueWriteBuffer(queue, rns_cl, CL_TRUE, 0,
+                                sizeof(float) * 3 * n_magnets, rns,
+                                0, 0, 0);
+    if (err != CL_SUCCESS) {
+        error(302, "Could not write to device memory.");
+    }
+    
+    //log("Setting kernel arguments ...");
+    err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &coords_cl);
+    err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &magnets_cl);
+    err |= clSetKernelArg(kernel, 4, sizeof(float), &friction);
+    err |= clSetKernelArg(kernel, 5, sizeof(int), &exponent);
+    err |= clSetKernelArg(kernel, 6, sizeof(unsigned int), &n_magnets);
+    err |= clSetKernelArg(kernel, 7, sizeof(cl_mem), &alphas_cl);
+    err |= clSetKernelArg(kernel, 8, sizeof(cl_mem), &rns_cl);
+    if (err != CL_SUCCESS) {
+        error(303, "Could no set kernel parameters: %d", err);
+    }
     
     // Time measurement.
     char buf[100];
@@ -393,37 +393,37 @@ void magnet_map() {
     double t_diff = std::difftime(t_end, t_start);
     log("%s: Hard work done in %.2lf s!", buf, t_diff);
     
-	log("Retrieving the results ...");
+    log("Retrieving the results ...");
     log("Creating an array to hold the mapped magnets ...");
     int *magnets = new int[phi_steps * theta_steps];
-	err = clEnqueueReadBuffer(queue, magnets_cl, CL_TRUE, 0,
-							  sizeof(int) * phi_steps * theta_steps, magnets,
-							  0, 0, 0);
-	if (err != CL_SUCCESS) {
-		error(307, "Failed to retrieve magnet map: %d", err);
-	}
-	
-	// Print the array.
-	//output_magnets(magnets);
-	save_image(magnets, "output.tif");
-		
-	// Clean up.
-	log("Freeing device memory ...");
-	clReleaseMemObject(coords_cl);
-	clReleaseMemObject(magnets_cl);
-	clReleaseMemObject(alphas_cl);
-	clReleaseMemObject(rns_cl);
-	delete[] coords;
-	delete[] magnets;
+    err = clEnqueueReadBuffer(queue, magnets_cl, CL_TRUE, 0,
+                              sizeof(int) * phi_steps * theta_steps, magnets,
+                              0, 0, 0);
+    if (err != CL_SUCCESS) {
+        error(307, "Failed to retrieve magnet map: %d", err);
+    }
+    
+    // Print the array.
+    //output_magnets(magnets);
+    save_image(magnets, "output.tif");
+        
+    // Clean up.
+    log("Freeing device memory ...");
+    clReleaseMemObject(coords_cl);
+    clReleaseMemObject(magnets_cl);
+    clReleaseMemObject(alphas_cl);
+    clReleaseMemObject(rns_cl);
+    delete[] coords;
+    delete[] magnets;
 }
 
 
 int main(const int argc, const char *argv[]) {
-	// Initialize OpenCL.
+    // Initialize OpenCL.
     cl_init();
-	
-	magnet_map();
+    
+    magnet_map();
 
-	// Free used resources.
+    // Free used resources.
     cl_deinit();
 }

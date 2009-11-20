@@ -27,7 +27,7 @@ __global float *rns;
 // Prototypes
 // -----------------------------------------------------------------------------
 void rk45(const float4 *y, const float t, const float dt, float4 *yout,
-	      const float atol, const float rtol, const size_t mxsteps, float hmin);
+          const float atol, const float rtol, const size_t mxsteps, float hmin);
 
 int find_magnet(const float phi, const float theta);
 
@@ -37,14 +37,14 @@ int find_magnet(const float phi, const float theta);
 // -----------------------------------------------------------------------------
 
 __kernel void map_magnets(__global float *coords,
-						 __global int *magnets,
+                         __global int *magnets,
                          const unsigned int offset,
-						 const unsigned int count,
-						 const float friction_,
-						 const int exponent_,
-						 const unsigned int n_magnets_,
-						 __global float *alphas_,
-						 __global float *rns_) {
+                         const unsigned int count,
+                         const float friction_,
+                         const int exponent_,
+                         const unsigned int n_magnets_,
+                         __global float *alphas_,
+                         __global float *rns_) {
     int i = get_global_id(0);
     
     if (i < count) {
@@ -107,7 +107,7 @@ void rhs(const float t, const float4 *y, float4 *dydt) {
                             - 2.0/tt * (*y).s3 * (*y).s2 - sum_phi;
 
     // Return vector.
-	*dydt = (float4)((*y).s2, (*y).s3, phidotdot, thetadotdot);
+    *dydt = (float4)((*y).s2, (*y).s3, phidotdot, thetadotdot);
 }
 
 /*
@@ -169,20 +169,20 @@ int find_magnet(const float phi, const float theta) {
         rk45(&y, 0, time_step, &y, ATOL, RTOL, 10000, -1);
 
         // Find the magnet that is nearest.
-		const float cp = cos(y.s0);
-		const float sp = sin(y.s0);
-		const float ct = cos(y.s1);
-		const float st = sin(y.s1);
+        const float cp = cos(y.s0);
+        const float sp = sin(y.s0);
+        const float ct = cos(y.s1);
+        const float st = sin(y.s1);
         int magnet = -1;
         float min = -1;
 
         for (int i = 0; i < n_magnets; ++i) {
-			// Calculate distance to magnet i.
-			float dx = cp * st - rns[3*i+0];
-			float dy = sp * st - rns[3*i+1];
-			float dz = ct - rns[3*i+2];
-			float dist = dx*dx + dy*dy + dz*dz;
-			
+            // Calculate distance to magnet i.
+            float dx = cp * st - rns[3*i+0];
+            float dy = sp * st - rns[3*i+1];
+            float dz = ct - rns[3*i+2];
+            float dist = dx*dx + dy*dy + dz*dz;
+            
             if (min < 0 || dist < min) {
                 min = dist;
                 magnet = i;
@@ -202,7 +202,7 @@ int find_magnet(const float phi, const float theta) {
             last_magnet = magnet;
         }
     }
-	
+    
     return last_magnet;
 }
 
@@ -252,7 +252,7 @@ void rk45_step(const float4 *y, const float4 *dydt,
     // Slope 1: k1 = dydt
 
     // Slope 2
-	tmp = *y + a21 * h * *dydt;
+    tmp = *y + a21 * h * *dydt;
     rhs(t + c2 * h, &tmp, &k2);
 
     // Slope 3
@@ -273,7 +273,7 @@ void rk45_step(const float4 *y, const float4 *dydt,
 
     // Slope 7
     // use FSAL trick to avoid one extra function evaluation
-	tmp = *y + h * (a71 * *dydt + a73 * k3 + a74 * k4 + a75 * k5 + a76 * k6);
+    tmp = *y + h * (a71 * *dydt + a73 * k3 + a74 * k4 + a75 * k5 + a76 * k6);
     rhs(t + h, &tmp, dydtout);
 
     // Solutions
@@ -342,7 +342,7 @@ void rk45(const float4 *y, const float t, const float dt, float4 *yout,
     float4 yt_err;
 
     rhs(t, y, &dydt);
-	*yout = *y;
+    *yout = *y;
 
     bool last_rejected = false;
     bool last_adjusted = true;
@@ -384,9 +384,9 @@ void rk45(const float4 *y, const float t, const float dt, float4 *yout,
             last_rejected = false;
             
             cur_t += h;
-			
+            
             *yout = yt_out;
-			dydt = dydt_out;
+            dydt = dydt_out;
         } else {
             // Error too big.
             scale = fmax(safety * pow(err, -alpha), minscale);
