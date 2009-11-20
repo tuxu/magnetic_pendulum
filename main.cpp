@@ -12,6 +12,7 @@
 #include <cstdarg>
 #include <cstdlib>
 #include <cmath>
+#include <ctime>
 #include <OpenCL/opencl.h>
 #include <IL/il.h>
 
@@ -347,12 +348,17 @@ void magnet_map() {
 		error(303, "Could no set kernel parameters: %d", err);
 	}
     
-    // Walk through the array using the pre-calculated cycles and show a
-    // progress indicator.
-    log("Doing hard work ...");
-    std::cout << "\rProgress: " << std::setw(6) << std::setprecision(2) 
+    // Time measurement.
+    char buf[100];
+    std::time_t t_start = time(0);
+    strftime(buf, 100, "%c", std::localtime(&t_start));
+    log("%s: Doing hard work ...", buf);
+    
+    std::cout << "\r## Progress: " << std::setw(6) << std::setprecision(2) 
     << 0.0f << " % " << std::flush;
     std::cout << std::showpoint << std::fixed;
+    // Walk through the array using the pre-calculated cycles and show a
+    // progress indicator.
     for (size_t c = 0; c < n_cycles - 1; ++c) {
         std::cout.flush();
         
@@ -377,11 +383,16 @@ void magnet_map() {
         // Progress indicator.
         float progress = 100.0 * (c + 1) / (n_cycles - 1);
         
-        std::cout << "\rProgress: " << std::setw(6) << std::setprecision(2) 
+        std::cout << "\r## Progress: " << std::setw(6) << std::setprecision(2) 
         << progress << " % ";
     }                          
     std::cout << std::endl;
-	
+    // Output 
+    std::time_t t_end = time(0);
+    strftime(buf, 100, "%c", std::localtime(&t_end));
+    double t_diff = std::difftime(t_end, t_start);
+    log("%s: Hard work done in %.2lf s!", buf, t_diff);
+    
 	log("Retrieving the results ...");
     log("Creating an array to hold the mapped magnets ...");
     int *magnets = new int[phi_steps * theta_steps];
