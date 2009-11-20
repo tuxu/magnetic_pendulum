@@ -13,8 +13,13 @@
 #include <cstdlib>
 #include <cmath>
 #include <ctime>
-#include <OpenCL/opencl.h>
 #include <IL/il.h>
+
+#ifdef __APPLE__
+#include <OpenCL/opencl.h>
+#else
+#include <CL/cl.h>
+#endif
 
 // -----------------------------------------------------------------------------
 // Constants
