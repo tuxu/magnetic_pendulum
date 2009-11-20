@@ -43,7 +43,7 @@ cl_kernel kernel;       // Compute kernel
  */
 const float phi_from = 0.0, phi_to = 2 * M_PI;
 const float theta_from = 0.5 * M_PI, theta_to = M_PI;
-const int phi_steps = 64, theta_steps = 64;
+const int phi_steps = 128, theta_steps = 128;
 unsigned char colors[3 * 3] = {255, 0, 0,
 							   0, 255, 0,
 							   0, 0, 255 };
@@ -286,26 +286,27 @@ void magnet_map() {
 			coords[index + 1] = theta;
         }
     }
+    
+    unsigned int compute_units;
+    err = clGetDeviceInfo(device_id, CL_DEVICE_MAX_COMPUTE_UNITS,
+                          sizeof(unsigned int), &compute_units, 0);
+	if (err != CL_SUCCESS) {
+		error(304, "Failed to retrieve compute unit information: %d", err);
+	}
+    log("Maximum compute units: %d", compute_units);
 	
-	log("Retrieving work group size ...");
-	size_t global, local;
+	size_t local;
 	err = clGetKernelWorkGroupInfo(kernel, device_id, CL_KERNEL_WORK_GROUP_SIZE,
 								   sizeof(size_t), &local, 0);
 	if (err != CL_SUCCESS) {
 		error(304, "Failed to retrieve kernel work group info: %d", err);
 	}
-	log("Maximum work group size is: %d", local);
+	log("Maximum work group size: %d", local);
 	
-	size_t magnets_len = phi_steps * theta_steps;
-	if (magnets_len % local == 0)
-		global = magnets_len;
-	else
-		global = (magnets_len / local + 1) * local;
-	
-	log("Work group sizes: local %d, global %d", local, global);
-	
-	log("Creating an array to hold the mapped magnets ...");
-	int *magnets = new int[global];
+    size_t cycle_len = compute_units * local;
+    size_t n_cycles = (phi_steps * theta_steps) / cycle_len + 1;
+    size_t magnets_cl_len = n_cycles * cycle_len;
+	log("Using %d cycles with a length of %d.", n_cycles, cycle_len);
 	
 	log("Asking for device memory ...");
 	cl_mem coords_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
@@ -315,7 +316,7 @@ void magnet_map() {
 	cl_mem rns_cl = clCreateBuffer(context, CL_MEM_READ_ONLY,
 								   sizeof(float) * 3 * n_magnets, 0, 0);
 	cl_mem magnets_cl = clCreateBuffer(context, CL_MEM_WRITE_ONLY, 
-									   sizeof(int) * magnets_len, 0, 0);
+									   sizeof(int) * magnets_cl_len, 0, 0);
 	if (!magnets_cl || !coords_cl || !alphas_cl || !rns_cl) {
 		error(301, "Could not allocate device memory!");
 	}
@@ -334,35 +335,58 @@ void magnet_map() {
 		error(302, "Could not write to device memory.");
 	}
 	
-	log("Setting kernel arguments ...");
+	//log("Setting kernel arguments ...");
 	err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &coords_cl);
 	err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &magnets_cl);
-	err |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &magnets_len);
-	err |= clSetKernelArg(kernel, 3, sizeof(float), &friction);
-	err |= clSetKernelArg(kernel, 4, sizeof(int), &exponent);
-	err |= clSetKernelArg(kernel, 5, sizeof(unsigned int), &n_magnets);
-	err |= clSetKernelArg(kernel, 6, sizeof(cl_mem), &alphas_cl);
-	err |= clSetKernelArg(kernel, 7, sizeof(cl_mem), &rns_cl);
+	err |= clSetKernelArg(kernel, 4, sizeof(float), &friction);
+	err |= clSetKernelArg(kernel, 5, sizeof(int), &exponent);
+	err |= clSetKernelArg(kernel, 6, sizeof(unsigned int), &n_magnets);
+	err |= clSetKernelArg(kernel, 7, sizeof(cl_mem), &alphas_cl);
+	err |= clSetKernelArg(kernel, 8, sizeof(cl_mem), &rns_cl);
 	if (err != CL_SUCCESS) {
 		error(303, "Could no set kernel parameters: %d", err);
 	}
-	
-	log("Queuing calculation ...");
-	err = clEnqueueNDRangeKernel(queue, kernel, 1, 0, &global, &local,
-								 0, 0, 0);
-	if (err) {
-		error(305, "Failed to execute kernel: %d", err);
-	}
-	
-	log("Waiting for the kernel to finish ...");
-	err = clFinish(queue);
-	if (err != CL_SUCCESS) {
-		error(306, "Error during kernel execution: %d", err);
-	}
+    
+    // Walk through the array using the pre-calculated cycles and show a
+    // progress indicator.
+    log("Doing hard work ...");
+    std::cout << "\rProgress: " << std::setw(6) << std::setprecision(2) 
+    << 0.0f << " % " << std::flush;
+    std::cout << std::showpoint << std::fixed;
+    for (size_t c = 0; c < n_cycles - 1; ++c) {
+        std::cout.flush();
+        
+        size_t offset = c * cycle_len;
+        err |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &offset);
+        err |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &cycle_len);
+        if (err != CL_SUCCESS) {
+            error(303, "Could no set kernel parameters: %d", err);
+        }                    
+        
+        err = clEnqueueNDRangeKernel(queue, kernel, 1, 0, &cycle_len, 0,
+                                     0, 0, 0);
+        if (err) {
+            error(305, "Failed to execute kernel: %d", err);
+        }
+        
+        err = clFinish(queue);
+        if (err != CL_SUCCESS) {
+            error(306, "Error during kernel execution: %d", err);
+        }
+        
+        // Progress indicator.
+        float progress = 100.0 * (c + 1) / (n_cycles - 1);
+        
+        std::cout << "\rProgress: " << std::setw(6) << std::setprecision(2) 
+        << progress << " % ";
+    }                          
+    std::cout << std::endl;
 	
 	log("Retrieving the results ...");
+    log("Creating an array to hold the mapped magnets ...");
+    int *magnets = new int[phi_steps * theta_steps];
 	err = clEnqueueReadBuffer(queue, magnets_cl, CL_TRUE, 0,
-							  sizeof(int) * magnets_len, magnets,
+							  sizeof(int) * phi_steps * theta_steps, magnets,
 							  0, 0, 0);
 	if (err != CL_SUCCESS) {
 		error(307, "Failed to retrieve magnet map: %d", err);

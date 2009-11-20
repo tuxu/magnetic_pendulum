@@ -177,6 +177,7 @@
 				);
 				INSTALL_PATH = /usr/local/bin;
 				PRODUCT_NAME = magnetic_pendulum;
+				VALID_ARCHS = x86_64;
 			};
 			name = Debug;
 		};
@@ -188,6 +189,7 @@
 				GCC_MODEL_TUNING = G5;
 				INSTALL_PATH = /usr/local/bin;
 				PRODUCT_NAME = magnetic_pendulum;
+				VALID_ARCHS = x86_64;
 			};
 			name = Release;
 		};

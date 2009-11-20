@@ -38,28 +38,28 @@ int find_magnet(const float phi, const float theta);
 
 __kernel void map_magnets(__global float *coords,
 						 __global int *magnets,
-						 const unsigned int magnets_len,
+                         const unsigned int offset,
+						 const unsigned int count,
 						 const float friction_,
 						 const int exponent_,
 						 const unsigned int n_magnets_,
 						 __global float *alphas_,
 						 __global float *rns_) {
     int i = get_global_id(0);
-	
-	if (i >= magnets_len)
-		return;
-	
-	friction = friction_;
-	exponent = exponent_;
-	n_magnets = n_magnets_;
-	alphas = alphas_;
-	rns = rns_;
-	
-	// Fetch coordinates.
-	float phi = coords[2 * i + 0];
-	float theta = coords[2 * i + 1];
-	
-	magnets[i] = find_magnet(phi, theta);
+    
+    if (i < count) {
+        friction = friction_;
+        exponent = exponent_;
+        n_magnets = n_magnets_;
+        alphas = alphas_;
+        rns = rns_;
+        
+        // Fetch coordinates.
+        float phi = coords[ 2 * (offset + i) + 0];
+        float theta = coords[2 * (offset + i) + 1];
+        
+        magnets[offset + i] = find_magnet(phi, theta);
+    }
 }
 
 
