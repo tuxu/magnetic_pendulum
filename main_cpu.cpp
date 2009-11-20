@@ -1,6 +1,8 @@
+// Compile with: g++-4.0 main_cpu.cpp -o main_cpu -Wall -O3 -I/opt/local/include/ -L/opt/local/lib -lIL -m64
 #include <iostream>
 #include <iomanip>
 #include <cmath>
+#include <ctime>
 using namespace std;
 
 void rhs(const float t, const float y[], float yout[]);
@@ -479,13 +481,13 @@ int find_magnet(float phi, float theta) {
 
 
 // --------------------------------------------------------------------------
-// Compile with: g++-4.0 main.cpp -o main -Wall -O3 -I/opt/local/include/ -L/opt/local/lib -lIL -m64
+
 
 #include <IL/il.h>
 
 float phi_from = 0.0, phi_to = 2*M_PI;
 float theta_from = 0.5 * M_PI, theta_to = M_PI;
-const int phi_steps = 800, theta_steps = 800;
+const int phi_steps = 400, theta_steps = 400;
 int magnets[phi_steps][theta_steps];
 ILubyte pixels[phi_steps * theta_steps * 3];
 ILubyte colors[3*3] = {255, 0, 0,
@@ -508,6 +510,12 @@ void magnet_map() {
     float dphi = (phi_to - phi_from) / (phi_steps - 1);
     float dtheta = (theta_to - theta_from) / (theta_steps - 1);
     float phi = 0, theta = 0;
+    
+    // Time measurement.
+    char buf[100];
+    time_t t_start = time(0);
+    strftime(buf, 100, "%c", localtime(&t_start));
+    cout << "Start: " << buf << endl;
     
     for (int x = 0; x < phi_steps; ++x) {
         for (int y = 0; y < theta_steps; ++y) {
@@ -538,6 +546,12 @@ void magnet_map() {
     }
 
     cout << endl;
+
+    time_t t_end = time(0);
+    strftime(buf, 100, "%c", localtime(&t_end));
+    double t_diff = std::difftime(t_end, t_start);
+    cout << "End: " << buf << endl;
+    cout << "Mapping took " << t_diff << " s!" << endl;
 }
 
 void save_image(const char *filename) {
