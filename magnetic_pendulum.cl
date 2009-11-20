@@ -189,7 +189,7 @@ int find_magnet(const float phi, const float theta) {
             }
         }
         
-        float kin = 0;//get_kinetic(&y);
+        float kin = get_kinetic(&y);
 
         /* Stop search, if:
          *      - kinetic energy is below threshold
