@@ -21,23 +21,20 @@
 #define ATOL 1e-6f
 #define RTOL ATOL
 
+// Parameters
+float friction;
+int exponent;
+int n_magnets;
+__global float *alphas;
+__global float *rns;
+
 // -----------------------------------------------------------------------------
 // Prototypes
 // -----------------------------------------------------------------------------
 void rk45(const float4 *y, const float t, const float dt, float4 *yout,
-          const float atol, const float rtol, const size_t mxsteps, float hmin,
-          const float friction,
-          const int exponent,
-          const unsigned int n_magnets,
-          __global float *alphas,
-          __global float *rns);
+          const float atol, const float rtol, const size_t mxsteps, float hmin);
 
-int find_magnet(const float phi, const float theta,
-                const float friction,
-                const int exponent,
-                const unsigned int n_magnets,
-                __global float *alphas,
-                __global float *rns);
+int find_magnet(const float phi, const float theta);
 
 
 // -----------------------------------------------------------------------------
@@ -48,22 +45,27 @@ __kernel void map_magnets(__global float *coords,
                          __global int *magnets,
                          const unsigned int offset,
                          const unsigned int count,
-                         const float friction,
-                         const int exponent,
-                         const unsigned int n_magnets,
-                         __global float *alphas,
-                         __global float *rns) {
+                         const float friction_,
+                         const int exponent_,
+                         const unsigned int n_magnets_,
+                         __global float *alphas_,
+                         __global float *rns_) {
     size_t i = get_global_id(0);
     
     if (i < count) {
         size_t ind = offset + i;
-            
+        
+        friction = friction_;
+        exponent = exponent_;
+        n_magnets = n_magnets_;
+        alphas = alphas_;
+        rns = rns_;
+        
         // Fetch coordinates.
         float phi = coords[ 2 * ind + 0];
         float theta = coords[2 * ind + 1];
         
-        int magnet = find_magnet(phi, theta, friction, exponent, n_magnets,
-                                 alphas, rns);
+        int magnet = find_magnet(phi, theta);
         magnets[ind] = magnet;
     }
 }
@@ -77,12 +79,7 @@ __kernel void map_magnets(__global float *coords,
  * Calculates the right hand side of the magnetic pendulum's ODE.
  *
  */
-void rhs(const float t, const float4 *y, float4 *dydt,
-         const float friction,
-         const int exponent,
-         const unsigned int n_magnets,
-         __global float *alphas,
-         __global float *rns) {
+void rhs(const float t, const float4 *y, float4 *dydt) {
     // Minimize trigonometric calculations.
     const float cp = COS((*y).s0);
     const float sp = SIN((*y).s0);
@@ -133,11 +130,7 @@ float get_kinetic(const float4 *y) {
  * Returns the potential energy of the system.
  *
  */
-float get_potential(const float4 *y,
-                    const int exponent,
-                    const unsigned int n_magnets,
-                    __global float *alphas,
-                    __global float *rns) {
+float get_potential(const float4 *y) {
     const float cp = COS((*y).s0);
     const float sp = SIN((*y).s0);
     const float ct = COS((*y).s1);
@@ -161,12 +154,7 @@ float get_potential(const float4 *y,
  * initial position `phi' and `theta'.
  *
  */
-int find_magnet(const float phi, const float theta,
-                const float friction,
-                const int exponent,
-                const unsigned int n_magnets,
-                __global float *alphas,
-                __global float *rns) {
+int find_magnet(const float phi, const float theta) {
     // Constants
     const float time_step = 5.0f;
     const int max_iterations = 30;
@@ -174,22 +162,19 @@ int find_magnet(const float phi, const float theta,
 
     // Starting vector.
     float4 y = (float4)(phi, theta, 0, 0);
-    float4 yout;
 
     // What to do for `theta' = 0 or pi?
     float eps = 1e-6f;
     if (theta > M_PI-eps && theta < M_PI+eps)
-        return -1;
+        return 0;
     if (theta > -eps && theta < eps)
-        return -1;
+        return 0;
 
     int last_magnet = -1;
 
     for (int iterations = 0; iterations < max_iterations; ++iterations) {
         // Solve ODE for t + time_step.
-        rk45(&y, 0, time_step, &yout, ATOL, RTOL, 1000, -1,
-             friction, exponent, n_magnets, alphas, rns);
-        y = yout;
+        rk45(&y, 0, time_step, &y, ATOL, RTOL, 10000, -1);
 
         // Find the magnet that is nearest.
         int magnet = -1;
@@ -203,7 +188,7 @@ int find_magnet(const float phi, const float theta,
             float4 r_magnet = (float4)(rns[3*i+0], rns[3*i+1],
                                        rns[3*i+2], 0);
             float dist = distance(r_pendulum, r_magnet);
-
+            
             if (min < 0 || dist < min) {
                 min = dist;
                 magnet = i;
@@ -212,10 +197,11 @@ int find_magnet(const float phi, const float theta,
         
         float kin = get_kinetic(&y);
 
-        // Stop search, if:
-        //      - kinetic energy is below threshold
-        //      - pendulum didn't move to another magnet within the last
-        //        iteration
+        /* Stop search, if:
+         *      - kinetic energy is below threshold
+         *      - pendulum didn't move to another magnet within the last
+         *        iteration
+         */
         if (kin < min_kin && magnet == last_magnet) {
             break;
         } else {
@@ -247,12 +233,7 @@ int find_magnet(const float phi, const float theta,
  */
 void rk45_step(const float4 *y, const float4 *dydt,
                const float t, const float h,
-               float4 *yout, float4 *dydtout, float4 *yerr,
-               const float friction,
-               const int exponent,
-               const unsigned int n_magnets,
-               __global float *alphas,
-               __global float *rns) {
+               float4 *yout, float4 *dydtout, float4 *yerr) {
     // Coefficients
     // <http://en.wikipedia.org/wiki/Dormand-Prince>
     const float c2 = 1./5, c3 = 3./10, c4 = 4./5, c5 = 8./9;
@@ -272,42 +253,41 @@ void rk45_step(const float4 *y, const float4 *dydt,
     const float b1 = 35./384, b3 = 500./1113, b4 = 125./192,
                 b5 = -2187./6784, b6 = 11./84;
 
-    float4 tmp, k1, k2, k3, k4, k5, k6;
+    float4 tmp, k2, k3, k4, k5, k6;
 
-    // Slope 1:
-    k1 = *dydt;
+    // Slope 1: k1 = dydt
 
     // Slope 2
-    tmp = *y + a21 * h * k1;
-    rhs(t + c2 * h, &tmp, &k2, friction, exponent, n_magnets, alphas, rns);
+    tmp = *y + a21 * h * *dydt;
+    rhs(t + c2 * h, &tmp, &k2);
 
     // Slope 3
-    tmp = *y + h * (a31 * k1 + a32 * k2);
-    rhs(t + c3 * h, &tmp, &k3, friction, exponent, n_magnets, alphas, rns);
+    tmp = *y + h * (a31 * *dydt + a32 * k2);
+    rhs(t + c3 * h, &tmp, &k3);
 
     // Slope 4
-    tmp = *y + h * (a41 * k1 + a42 * k2 + a43 * k3);
-    rhs(t + c4 * h, &tmp, &k4, friction, exponent, n_magnets, alphas, rns);
+    tmp = *y + h * (a41 * *dydt + a42 * k2 + a43 * k3);
+    rhs(t + c4 * h, &tmp, &k4);
 
     // Slope 5
-    tmp = *y + h * (a51 * k1 + a52 * k2 + a53 * k3 + a54 * k4);
-    rhs(t + c5 * h, &tmp, &k5, friction, exponent, n_magnets, alphas, rns);
+    tmp = *y + h * (a51 * *dydt + a52 * k2 + a53 * k3 + a54 * k4);
+    rhs(t + c5 * h, &tmp, &k5);
 
     // Slope 6
-    tmp = *y + h * (a61 * k1 + a62 * k2 + a63 * k3 + a64 * k4 + a65 * k5);
-    rhs(t + h, &tmp, &k6, friction, exponent, n_magnets, alphas, rns);
+    tmp = *y + h * (a61 * *dydt + a62 * k2 + a63 * k3 + a64 * k4 + a65 * k5);
+    rhs(t + h, &tmp, &k6);
 
     // Slope 7
     // use FSAL trick to avoid one extra function evaluation
-    tmp = *y + h * (a71 * k1 + a73 * k3 + a74 * k4 + a75 * k5 + a76 * k6);
-    rhs(t + h, &tmp, dydtout, friction, exponent, n_magnets, alphas, rns);
+    tmp = *y + h * (a71 * *dydt + a73 * k3 + a74 * k4 + a75 * k5 + a76 * k6);
+    rhs(t + h, &tmp, dydtout);
 
     // Solutions
     // 4th order solution
-    float4 yt_r = *y + h * (b1r * k1 + b3r * k3 + b4r * k4 + b5r * k5 +
+    float4 yt_r = *y + h * (b1r * *dydt + b3r * k3 + b4r * k4 + b5r * k5 +
                             b6r * k6 + b7r * *dydtout);
     // 5th order solution
-    *yout = *y + h * (b1 * k1 + b3 * k3 + b4 * k4 + b5 * k5 + b6 * k6);
+    *yout = *y + h * (b1 * *dydt + b3 * k3 + b4 * k4 + b5 * k5 + b6 * k6);
     
     // Error estimation
     *yerr = *yout - yt_r;
@@ -345,12 +325,7 @@ float rk45_error(const float4 *y, const float4 *yh, const float4 *yerr,
  */
 void rk45(const float4 *y, const float t, const float dt, float4 *yout,
           const float atol, const float rtol, const size_t mxsteps,
-          float hmin,
-          const float friction,
-          const int exponent,
-          const unsigned int n_magnets,
-          __global float *alphas,
-          __global float *rns) {
+          float hmin) {
     const float safety = 0.9; // Safety factor.
     const float alpha = 0.2, minscale = 0.2, maxscale = 10.0;
 
@@ -369,22 +344,22 @@ void rk45(const float4 *y, const float t, const float dt, float4 *yout,
 
     // Preparation
     float4 dydt, dydt_out;
-    float4 yt_out, yy;
+    float4 yt_out;
     float4 yt_err;
 
-    rhs(t, y, &dydt, friction, exponent, n_magnets, alphas, rns);
-    yy = *y;
+    rhs(t, y, &dydt);
+    *yout = *y;
 
-    int last_rejected = 0;
-    int last_adjusted = 1;
+    bool last_rejected = false;
+    bool last_adjusted = true;
 
     // Walk through (t..t+dt) and adapt step width.
     for (size_t steps = 0; ; ++steps) {
         // Maximum steps used?
         if (steps > mxsteps) {
-            //printf("Used maximum number of steps!\n"
-            //       "Remaining: %f\n"
-            //       "h: %f\n", (target_t - cur_t), h);
+            /*printf("Used maximum number of steps!\n"
+                   "Remaining: %f\n"
+                   "h: %f\n", (target_t - cur_t), h);*/
             break;
         }
 
@@ -394,12 +369,11 @@ void rk45(const float4 *y, const float t, const float dt, float4 *yout,
         }
 
         // Do an actual integration step.
-        rk45_step(&yy, &dydt, cur_t, h, &yt_out, &dydt_out, &yt_err,
-                  friction, exponent, n_magnets, alphas, rns);
+        rk45_step(yout, &dydt, cur_t, h, &yt_out, &dydt_out, &yt_err);
         float err = rk45_error(yout, &yt_out, &yt_err, atol, rtol);
 
         float hnew, scale;
-        if (err <= 1.0f || last_adjusted == 0) {
+        if (err <= 1 || !last_adjusted) {
             // Integration was successful. Compute a better h.
             if (err == 0) {
                 scale = maxscale;
@@ -413,31 +387,30 @@ void rk45(const float4 *y, const float t, const float dt, float4 *yout,
             else
                 hnew = h * scale;
 
-            last_rejected = 0;
+            last_rejected = false;
             
             cur_t += h;
             
-            yy = yt_out;
+            *yout = yt_out;
             dydt = dydt_out;
         } else {
             // Error too big.
             scale = fmax(safety * pow(err, -alpha), minscale);
             hnew = h * scale;
-            last_rejected = 1;
+            last_rejected = true;
         }
 
         if (hnew < hmin) {
             //printf("h got too small, no adjustment.\n");
-            last_adjusted = 0;
+            last_adjusted = false;
         } else {
             h = hnew;
-            last_adjusted = 1;
+            last_adjusted = true;
         }
     }
 
     // Do the remaining step to reach target_t.
-    rk45_step(&yy, &dydt, cur_t, target_t - cur_t, yout, &dydt_out, &yt_err,
-              friction, exponent, n_magnets, alphas, rns);
+    rk45_step(yout, &dydt, cur_t, target_t - cur_t, yout, &dydt_out, &yt_err);
 }
 
 

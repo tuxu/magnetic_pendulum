@@ -25,7 +25,14 @@
 // Constants
 // -----------------------------------------------------------------------------
 
+#undef USE_LLVM_VERSION
+
+#ifdef USE_LLVM_VERSION
+const char *kernel_filename = "magnetic_pendulum_llvm.cl";
+#else
 const char *kernel_filename = "magnetic_pendulum.cl";
+#endif
+
 const bool use_gpu = true;
 
 // -----------------------------------------------------------------------------
@@ -360,11 +367,11 @@ void magnet_map() {
     log("%s: Doing hard work ...", buf);
     
     std::cout << "\r## Progress: " << std::setw(6) << std::setprecision(2) 
-    << 0.0f << " % " << std::flush;
+              << 0.0f << " % " << std::flush;
     std::cout << std::showpoint << std::fixed;
     // Walk through the array using the pre-calculated cycles and show a
     // progress indicator.
-    for (size_t c = 0; c < n_cycles - 1; ++c) {
+    for (size_t c = 0; c < (n_cycles - 1); ++c) {
         std::cout.flush();
         
         size_t offset = c * cycle_len;
@@ -389,7 +396,7 @@ void magnet_map() {
         float progress = 100.0 * (c + 1) / (n_cycles - 1);
         
         std::cout << "\r## Progress: " << std::setw(6) << std::setprecision(2) 
-        << progress << " % ";
+                  << progress << " % ";
     }                          
     std::cout << std::endl;
     // Output 
