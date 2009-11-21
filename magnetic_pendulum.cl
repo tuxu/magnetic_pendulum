@@ -9,11 +9,16 @@
 // -----------------------------------------------------------------------------
 
 #ifndef M_PI
-#define M_PI 3.14159265358979323846264338327950288
+#define M_PI 3.14159265358979323846264338327950288f
 #endif
 
+#define SIN(x) native_sin(x)
+#define COS(x) native_cos(x)
+#define TAN(x) native_tan(x)
+#define SQRT(x) native_sqrt(x)
+
 // Integration tolerances
-#define ATOL 1e-6
+#define ATOL 1e-6f
 #define RTOL ATOL
 
 // Parameters
@@ -45,9 +50,11 @@ __kernel void map_magnets(__global float *coords,
                          const unsigned int n_magnets_,
                          __global float *alphas_,
                          __global float *rns_) {
-    int i = get_global_id(0);
+    size_t i = get_global_id(0);
     
     if (i < count) {
+        size_t ind = offset + i;
+        
         friction = friction_;
         exponent = exponent_;
         n_magnets = n_magnets_;
@@ -55,10 +62,11 @@ __kernel void map_magnets(__global float *coords,
         rns = rns_;
         
         // Fetch coordinates.
-        float phi = coords[ 2 * (offset + i) + 0];
-        float theta = coords[2 * (offset + i) + 1];
+        float phi = coords[ 2 * ind + 0];
+        float theta = coords[2 * ind + 1];
         
-        magnets[offset + i] = find_magnet(phi, theta);
+        int magnet = find_magnet(phi, theta);
+        magnets[ind] = magnet;
     }
 }
 
@@ -73,11 +81,11 @@ __kernel void map_magnets(__global float *coords,
  */
 void rhs(const float t, const float4 *y, float4 *dydt) {
     // Minimize trigonometric calculations.
-    const float cp = cos((*y).s0);
-    const float sp = sin((*y).s0);
-    const float ct = cos((*y).s1);
-    const float st = sin((*y).s1);
-    const float tt = tan((*y).s1);
+    const float cp = COS((*y).s0);
+    const float sp = SIN((*y).s0);
+    const float ct = COS((*y).s1);
+    const float st = SIN((*y).s1);
+    const float tt = TAN((*y).s1);
 
     // Sum the magnet's contributions to the nominator.
     float sum_theta = 0;
@@ -90,13 +98,13 @@ void rhs(const float t, const float4 *y, float4 *dydt) {
         float alpha = alphas[i];
         // Denominator
         float A = pow(
-                    pow(cp * st - x, 2.0f) +
-                    pow(sp * st - y, 2.0f) +
-                    pow(ct - z, 2.0f),
-                    exponent / 2.0f + 1.0f);
-        sum_theta += exponent * alpha / A *
+                    pown(cp * st - x, 2) +
+                    pown(sp * st - y, 2) +
+                    pown(ct - z, 2),
+                    - exponent / 2.0f - 1.0f);
+        sum_theta += exponent * alpha * A *
             (ct*cp * (cp*st - x) + ct*sp * (st*sp - y) - st * (ct - z));
-        sum_phi += exponent * alpha / A *
+        sum_phi += exponent * alpha * A *
             (cp * (sp - y/st) - sp * (cp - x/st));
     }
 
@@ -104,7 +112,7 @@ void rhs(const float t, const float4 *y, float4 *dydt) {
     const float thetadotdot = ct*st * (*y).s2 * (*y).s2 + st
                             - friction * (*y).s3 - sum_theta;
     const float phidotdot = -friction * st * (*y).s2 
-                            - 2.0/tt * (*y).s3 * (*y).s2 - sum_phi;
+                            - 2.0f/tt * (*y).s3 * (*y).s2 - sum_phi;
 
     // Return vector.
     *dydt = (float4)((*y).s2, (*y).s3, phidotdot, thetadotdot);
@@ -115,7 +123,7 @@ void rhs(const float t, const float4 *y, float4 *dydt) {
  *
  */
 float get_kinetic(const float4 *y) {
-    return 0.5 * ((*y).s3*(*y).s3 + sin((*y).s1)*sin((*y).s1) * (*y).s2*(*y).s2);
+    return 0.5f * ((*y).s3*(*y).s3 + SIN((*y).s1)*SIN((*y).s1) * (*y).s2*(*y).s2);
 }
 
 /*
@@ -123,17 +131,17 @@ float get_kinetic(const float4 *y) {
  *
  */
 float get_potential(const float4 *y) {
-    const float cp = cos((*y).s0);
-    const float sp = sin((*y).s0);
-    const float ct = cos((*y).s1);
-    const float st = sin((*y).s1);
+    const float cp = COS((*y).s0);
+    const float sp = SIN((*y).s0);
+    const float ct = COS((*y).s1);
+    const float st = SIN((*y).s1);
     
     float sum = 0;
     for (int i = 0; i < n_magnets; ++i) {
         sum += alphas[i] * pow(
-                pow(cp * st - rns[3*i+0], 2.0f) +
-                pow(sp * st - rns[3*i+1], 2.0f) +
-                pow(ct - rns[3*i+2], 2.0f),
+                pown(cp * st - rns[3*i+0], 2) +
+                pown(sp * st - rns[3*i+1], 2) +
+                pown(ct - rns[3*i+2], 2),
                 exponent / 2.0f
                 );
     }
@@ -148,19 +156,19 @@ float get_potential(const float4 *y) {
  */
 int find_magnet(const float phi, const float theta) {
     // Constants
-    const float time_step = 5.0;
+    const float time_step = 5.0f;
     const int max_iterations = 30;
-    const float min_kin = 0.5;
+    const float min_kin = 0.5f;
 
     // Starting vector.
     float4 y = (float4)(phi, theta, 0, 0);
 
     // What to do for `theta' = 0 or pi?
-    float eps = 1e-6;
+    float eps = 1e-6f;
     if (theta > M_PI-eps && theta < M_PI+eps)
-        return -1;
+        return 0;
     if (theta > -eps && theta < eps)
-        return -1;
+        return 0;
 
     int last_magnet = -1;
 
@@ -169,19 +177,17 @@ int find_magnet(const float phi, const float theta) {
         rk45(&y, 0, time_step, &y, ATOL, RTOL, 10000, -1);
 
         // Find the magnet that is nearest.
-        const float cp = cos(y.s0);
-        const float sp = sin(y.s0);
-        const float ct = cos(y.s1);
-        const float st = sin(y.s1);
         int magnet = -1;
         float min = -1;
-
+        
+        const float4 r_pendulum = (float4)(COS(y.s0) * SIN(y.s1),
+                                           SIN(y.s0) * SIN(y.s1),
+                                           COS(y.s1), 0);
         for (int i = 0; i < n_magnets; ++i) {
             // Calculate distance to magnet i.
-            float dx = cp * st - rns[3*i+0];
-            float dy = sp * st - rns[3*i+1];
-            float dz = ct - rns[3*i+2];
-            float dist = dx*dx + dy*dy + dz*dz;
+            float4 r_magnet = (float4)(rns[3*i+0], rns[3*i+1],
+                                       rns[3*i+2], 0);
+            float dist = distance(r_pendulum, r_magnet);
             
             if (min < 0 || dist < min) {
                 min = dist;
@@ -404,7 +410,7 @@ void rk45(const float4 *y, const float t, const float dt, float4 *yout,
     }
 
     // Do the remaining step to reach target_t.
-    rk45_step(yout, &dydt, cur_t, target_t - cur_t, &yout, &dydt_out, &yt_err);
+    rk45_step(yout, &dydt, cur_t, target_t - cur_t, yout, &dydt_out, &yt_err);
 }
 
 
