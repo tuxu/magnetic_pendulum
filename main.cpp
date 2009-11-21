@@ -25,14 +25,7 @@
 // Constants
 // -----------------------------------------------------------------------------
 
-#undef USE_LLVM_VERSION
-
-#ifdef USE_LLVM_VERSION
-const char *kernel_filename = "magnetic_pendulum_llvm.cl";
-#else
 const char *kernel_filename = "magnetic_pendulum.cl";
-#endif
-
 const bool use_gpu = true;
 
 // -----------------------------------------------------------------------------
@@ -148,7 +141,11 @@ void cl_init() {
 
     log("Creating the compute program ...");
     std::string source = file_content(kernel_filename);
-    const char *str = source.c_str();
+    std::ostringstream srcstream;
+    // Set necessary array lengths using preprocessor.
+    srcstream << "#define ALPHAS_LEN " << n_magnets << std::endl;
+    srcstream << source;
+    const char *str = srcstream.str().c_str();
 
     program = clCreateProgramWithSource(context, 1,
                                         (const char **) &str,
@@ -352,7 +349,6 @@ void magnet_map() {
         error(302, "Could not write to device memory.");
     }
     
-    //log("Setting kernel arguments ...");
     err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &coords_cl);
     err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &magnets_cl);
     err |= clSetKernelArg(kernel, 4, sizeof(float), &friction);
@@ -363,6 +359,8 @@ void magnet_map() {
     err |= clSetKernelArg(kernel, 9, sizeof(float), &time_step);
     err |= clSetKernelArg(kernel, 10, sizeof(float), &min_kin);
     err |= clSetKernelArg(kernel, 11, sizeof(unsigned int), &max_iterations);
+    err |= clSetKernelArg(kernel, 12, sizeof(float) * n_magnets, 0);
+    err |= clSetKernelArg(kernel, 13, sizeof(float) * 3 * n_magnets, 0);
     if (err != CL_SUCCESS) {
         error(303, "Could no set kernel parameters: %d", err);
     }

@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		210DE15510B827A9007B0A00 /* magnetic_pendulum_llvm.cl in Sources */ = {isa = PBXBuildFile; fileRef = 210DE15410B827A9007B0A00 /* magnetic_pendulum_llvm.cl */; };
-		210DE15710B827BC007B0A00 /* magnetic_pendulum_llvm.cl in CopyFiles */ = {isa = PBXBuildFile; fileRef = 210DE15410B827A9007B0A00 /* magnetic_pendulum_llvm.cl */; };
 		21941C7110B4BD46005098EF /* magnetic_pendulum.cl in Sources */ = {isa = PBXBuildFile; fileRef = 21941C7010B4BD46005098EF /* magnetic_pendulum.cl */; };
 		21941C7510B4BDB4005098EF /* OpenCL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21941C7410B4BDB4005098EF /* OpenCL.framework */; };
 		21941C8E10B4C042005098EF /* magnetic_pendulum.cl in CopyFiles */ = {isa = PBXBuildFile; fileRef = 21941C7010B4BD46005098EF /* magnetic_pendulum.cl */; };
@@ -23,7 +21,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 16;
 			files = (
-				210DE15710B827BC007B0A00 /* magnetic_pendulum_llvm.cl in CopyFiles */,
 				21941C8E10B4C042005098EF /* magnetic_pendulum.cl in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -42,7 +39,6 @@
 
 /* Begin PBXFileReference section */
 		08FB7796FE84155DC02AAC07 /* main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
-		210DE15410B827A9007B0A00 /* magnetic_pendulum_llvm.cl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.opencl; path = magnetic_pendulum_llvm.cl; sourceTree = "<group>"; };
 		21941C7010B4BD46005098EF /* magnetic_pendulum.cl */ = {isa = PBXFileReference; explicitFileType = sourcecode.opencl; fileEncoding = 4; path = magnetic_pendulum.cl; sourceTree = "<group>"; };
 		21941C7410B4BDB4005098EF /* OpenCL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenCL.framework; path = /System/Library/Frameworks/OpenCL.framework; sourceTree = "<absolute>"; };
 		8DD76F6C0486A84900D96B5E /* magnetic_pendulum */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = magnetic_pendulum; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -100,7 +96,6 @@
 		21941C8310B4BE71005098EF /* OpenCL Kernels */ = {
 			isa = PBXGroup;
 			children = (
-				210DE15410B827A9007B0A00 /* magnetic_pendulum_llvm.cl */,
 				21941C7010B4BD46005098EF /* magnetic_pendulum.cl */,
 			);
 			name = "OpenCL Kernels";
@@ -160,7 +155,6 @@
 			files = (
 				8DD76F650486A84900D96B5E /* main.cpp in Sources */,
 				21941C7110B4BD46005098EF /* magnetic_pendulum.cl in Sources */,
-				210DE15510B827A9007B0A00 /* magnetic_pendulum_llvm.cl in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
