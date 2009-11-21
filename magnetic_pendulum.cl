@@ -21,6 +21,10 @@
 #define ATOL 1e-6f
 #define RTOL ATOL
 
+// Maximum number of magnets.
+#define MAGNET_LEN 3
+#define RNS_LEN 3*MAGNET_LEN
+
 // -----------------------------------------------------------------------------
 // Prototypes
 // -----------------------------------------------------------------------------
@@ -29,15 +33,15 @@ void rk45(const float4 *y, const float t, const float dt, float4 *yout,
           const float friction,
           const int exponent,
           const unsigned int n_magnets,
-          __global float *alphas,
-          __global float *rns);
+          __local float *alphas,
+          __local float *rns);
 
 int find_magnet(const float phi, const float theta,
                 const float friction,
                 const int exponent,
                 const unsigned int n_magnets,
-                __global float *alphas,
-                __global float *rns,
+                __local float *alphas,
+                __local float *rns,
                 const float time_step,
                 const float min_kin,
                 const unsigned int max_iterations);
@@ -54,8 +58,8 @@ __kernel void map_magnets(__global float *coords,
                          const float friction,
                          const int exponent,
                          const unsigned int n_magnets,
-                         __global float *alphas,
-                         __global float *rns,
+                         __global float *g_alphas,
+                         __global float *g_rns,
                          const float time_step,
                          const float min_kin,
                          const unsigned int max_iterations) {
@@ -67,6 +71,16 @@ __kernel void map_magnets(__global float *coords,
         // Fetch coordinates.
         float phi = coords[ 2 * ind + 0];
         float theta = coords[2 * ind + 1];
+        
+        // Copy alphas and rns to local memory.
+        __local float alphas[MAGNET_LEN];
+        __local float rns[RNS_LEN];
+        for (int i = 0; i < MAGNET_LEN; ++i) {
+            alphas[i] = g_alphas[i];
+            rns[i] = g_rns[i];
+            rns[i+1] = g_rns[i+1];
+            rns[i+2] = g_rns[i+2];            
+        }
         
         int magnet = find_magnet(phi, theta, friction, exponent, n_magnets,
                                  alphas, rns, time_step, min_kin,
@@ -88,8 +102,8 @@ void rhs(const float t, const float4 *y, float4 *dydt,
          const float friction,
          const int exponent,
          const unsigned int n_magnets,
-         __global float *alphas,
-         __global float *rns) {
+         __local float *alphas,
+         __local float *rns) {
     // Minimize trigonometric calculations.
     const float cp = COS((*y).s0);
     const float sp = SIN((*y).s0);
@@ -143,8 +157,8 @@ float get_kinetic(const float4 *y) {
 float get_potential(const float4 *y,
                     const int exponent,
                     const unsigned int n_magnets,
-                    __global float *alphas,
-                    __global float *rns) {
+                    __local float *alphas,
+                    __local float *rns) {
     const float cp = COS((*y).s0);
     const float sp = SIN((*y).s0);
     const float ct = COS((*y).s1);
@@ -172,8 +186,8 @@ int find_magnet(const float phi, const float theta,
                 const float friction,
                 const int exponent,
                 const unsigned int n_magnets,
-                __global float *alphas,
-                __global float *rns,
+                __local float *alphas,
+                __local float *rns,
                 const float time_step,
                 const float min_kin,
                 const unsigned int max_iterations) {
@@ -256,8 +270,8 @@ void rk45_step(const float4 *y, const float4 *dydt,
                const float friction,
                const int exponent,
                const unsigned int n_magnets,
-               __global float *alphas,
-               __global float *rns) {
+               __local float *alphas,
+               __local float *rns) {
     // Coefficients
     // <http://en.wikipedia.org/wiki/Dormand-Prince>
     const float c2 = 1./5, c3 = 3./10, c4 = 4./5, c5 = 8./9;
@@ -354,8 +368,8 @@ void rk45(const float4 *y, const float t, const float dt, float4 *yout,
           const float friction,
           const int exponent,
           const unsigned int n_magnets,
-          __global float *alphas,
-          __global float *rns) {
+          __local float *alphas,
+          __local float *rns) {
     const float safety = 0.9; // Safety factor.
     const float alpha = 0.2, minscale = 0.2, maxscale = 10.0;
 
