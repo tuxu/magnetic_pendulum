@@ -157,7 +157,8 @@ void cl_init() {
         error(203, "Failed to create compute program!");
 
     log("Building the program executable ...");
-    err = clBuildProgram(program, 0, 0, "-Werror", 0, 0);
+    err = clBuildProgram(program, 0, 0,
+                         "-Werror -cl-mad-enable -cl-fast-relaxed-math", 0, 0);
     if (err != CL_SUCCESS) {
         char *buffer;
         
