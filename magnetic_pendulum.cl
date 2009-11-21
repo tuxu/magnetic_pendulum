@@ -37,7 +37,10 @@ int find_magnet(const float phi, const float theta,
                 const int exponent,
                 const unsigned int n_magnets,
                 __global float *alphas,
-                __global float *rns);
+                __global float *rns,
+                const float time_step,
+                const float min_kin,
+                const unsigned int max_iterations);
 
 
 // -----------------------------------------------------------------------------
@@ -52,7 +55,10 @@ __kernel void map_magnets(__global float *coords,
                          const int exponent,
                          const unsigned int n_magnets,
                          __global float *alphas,
-                         __global float *rns) {
+                         __global float *rns,
+                         const float time_step,
+                         const float min_kin,
+                         const unsigned int max_iterations) {
     size_t i = get_global_id(0);
     
     if (i < count) {
@@ -63,7 +69,8 @@ __kernel void map_magnets(__global float *coords,
         float theta = coords[2 * ind + 1];
         
         int magnet = find_magnet(phi, theta, friction, exponent, n_magnets,
-                                 alphas, rns);
+                                 alphas, rns, time_step, min_kin,
+                                 max_iterations);
         magnets[ind] = magnet;
     }
 }
@@ -166,12 +173,10 @@ int find_magnet(const float phi, const float theta,
                 const int exponent,
                 const unsigned int n_magnets,
                 __global float *alphas,
-                __global float *rns) {
-    // Constants
-    const float time_step = 5.0f;
-    const int max_iterations = 30;
-    const float min_kin = 0.5f;
-
+                __global float *rns,
+                const float time_step,
+                const float min_kin,
+                const unsigned int max_iterations) {
     // Starting vector.
     float4 y = (float4)(phi, theta, 0, 0);
     float4 yout;

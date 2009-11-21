@@ -34,7 +34,10 @@ __global float *rns;
 void rk45(const float4 *y, const float t, const float dt, float4 *yout,
           const float atol, const float rtol, const size_t mxsteps, float hmin);
 
-int find_magnet(const float phi, const float theta);
+int find_magnet(const float phi, const float theta,
+                const float time_step,
+                const float min_kin,
+                const unsigned int max_iterations);
 
 
 // -----------------------------------------------------------------------------
@@ -49,7 +52,10 @@ __kernel void map_magnets(__global float *coords,
                          const int exponent_,
                          const unsigned int n_magnets_,
                          __global float *alphas_,
-                         __global float *rns_) {
+                         __global float *rns_,
+                         const float time_step,
+                         const float min_kin,
+                         const unsigned int max_iterations) {
     size_t i = get_global_id(0);
     
     if (i < count) {
@@ -65,7 +71,8 @@ __kernel void map_magnets(__global float *coords,
         float phi = coords[ 2 * ind + 0];
         float theta = coords[2 * ind + 1];
         
-        int magnet = find_magnet(phi, theta);
+        int magnet = find_magnet(phi, theta, time_step, min_kin,
+                                 max_iterations);
         magnets[ind] = magnet;
     }
 }
@@ -154,12 +161,10 @@ float get_potential(const float4 *y) {
  * initial position `phi' and `theta'.
  *
  */
-int find_magnet(const float phi, const float theta) {
-    // Constants
-    const float time_step = 5.0f;
-    const int max_iterations = 30;
-    const float min_kin = 0.5f;
-
+int find_magnet(const float phi, const float theta,
+                const float time_step,
+                const float min_kin,
+                const unsigned int max_iterations) {
     // Starting vector.
     float4 y = (float4)(phi, theta, 0, 0);
 

@@ -67,6 +67,9 @@ float alphas[n_magnets] = { 1.0, 1.0, 1.0 };
 float rns[3 * n_magnets] = { -0.8660254, -0.5, -1.3,
                               0.8660254, -0.5, -1.3,
                               0.0, 1.0, -1.3 };
+const float time_step = 5.0f;
+const float min_kin = 0.5f;
+const int max_iterations = 30;
 
 
 // -----------------------------------------------------------------------------
@@ -356,6 +359,9 @@ void magnet_map() {
     err |= clSetKernelArg(kernel, 6, sizeof(unsigned int), &n_magnets);
     err |= clSetKernelArg(kernel, 7, sizeof(cl_mem), &alphas_cl);
     err |= clSetKernelArg(kernel, 8, sizeof(cl_mem), &rns_cl);
+    err |= clSetKernelArg(kernel, 9, sizeof(float), &time_step);
+    err |= clSetKernelArg(kernel, 10, sizeof(float), &min_kin);
+    err |= clSetKernelArg(kernel, 11, sizeof(unsigned int), &max_iterations);
     if (err != CL_SUCCESS) {
         error(303, "Could no set kernel parameters: %d", err);
     }
