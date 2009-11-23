@@ -1,0 +1,25 @@
+Magnetic Pendulum, OpenCL version
+=================================
+
+This is an implementation of a magnetic pendulum in OpenCL. A spherical
+pendulum is influenced by magnets. For every point of origin the program
+finds the magnet the pendulum's body will be nearest when it comes to rest
+(friction is taken into account). It will create an image, where every pixel
+(points in the $\phi$-$\theta$-plane) is mapped to a color representing
+each magnet.
+
+The problem is ideally suited for parallel computing as every initial
+condition can be solved independently from the others. I did a Python version
+some time ago that utilized Scipy. Although it was quite optimized with C code,
+it performed very bad. To create a map of 1600x1600 pixels, it took about 2700
+minutes! Leveraging the power hidden in GPUs, I wanted to know what speed-up
+would be reached.
+
+The code works quite good so far. I began coding a CPU version in C that is a
+lot faster than the original Python version, but even my decent GPU out-
+performs that by a factor of ten. The map from above can now be done in 284
+seconds. That is seconds, not minutes! :-)
+
+However, I think there is still plenty of room for optimization and a
+real-time visualization of the mapping process would be really cool.
+

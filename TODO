@@ -1,0 +1,7 @@
+TODO
+====
+
+* add a XML file loader to read in parameters
+* handle command line arguments (input/output files)
+* increase rendering speed
+* create a visualization of the rendering process

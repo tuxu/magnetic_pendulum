@@ -1,0 +1,30 @@
+CPU vs. GPU
+===========
+
+Host: Mac OS X 10.6.2, Intel C2D E4500 @ 2.2 GHz, Nvidia Geforce GTS 250
+
+Test 1
+------
+phi = [0 .. 2pi], 800 px
+theta = [0.5pi .. pi], 800 px
+friction = 1.0
+exponent = 2
+3 magnets
+time_step = 5.0, min_kin = 0.5f, max_iterations = 30
+atol = rtol = 1e-6, mxstep = 2000
+
+CPU (single core, float): 192 s
+CPU (single core, double): 266 s
+GPU (float): 21 s
+
+Test 2
+------
+as in test 1, but with friction = 0.1
+CPU (single core, float): 569 s
+GPU (float): 75 s
+
+Test 3
+------
+as in test 2, but with increased resolution: 1600x1600
+GPU (float): 284 s
+
