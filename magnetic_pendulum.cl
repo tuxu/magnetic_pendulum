@@ -20,6 +20,7 @@
 // Integration tolerances
 #define ATOL 1e-6f
 #define RTOL ATOL
+#define MXSTEP 2000
 
 // Parameter dimensions
 #ifndef ALPHAS_LEN
@@ -211,7 +212,7 @@ int find_magnet(const float phi, const float theta,
 
     for (int iterations = 0; iterations < max_iterations; ++iterations) {
         // Solve ODE for t + time_step.
-        rk45(&y, 0, time_step, &yout, ATOL, RTOL, 1000, -1,
+        rk45(&y, 0, time_step, &yout, ATOL, RTOL, MXSTEP, -1,
              friction, exponent, n_magnets, alphas, rns);
         y = yout;
 
